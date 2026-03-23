@@ -9,6 +9,7 @@ import { format, addDays, parseISO, isWithinInterval } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
+import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 
 export default function LookAheadEditor() {
   const { id: projectId, lookaheadId } = useParams<{ id: string; lookaheadId: string }>();
