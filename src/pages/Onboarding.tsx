@@ -22,11 +22,11 @@ export default function Onboarding() {
 
     const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
-    const { data: company, error: companyError } = await supabase
+    const companyId = crypto.randomUUID();
+
+    const { error: companyError } = await supabase
       .from("companies")
-      .insert({ name: companyName, slug })
-      .select()
-      .single();
+      .insert({ id: companyId, name: companyName, slug });
 
     if (companyError) {
       toast({ title: "Error", description: companyError.message, variant: "destructive" });
@@ -37,7 +37,7 @@ export default function Onboarding() {
     // Update profile with company_id
     await supabase
       .from("profiles")
-      .update({ company_id: company.id })
+      .update({ company_id: companyId })
       .eq("user_id", user.id);
 
     // Grant admin role
