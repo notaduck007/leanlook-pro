@@ -1,0 +1,250 @@
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Upload, FileText, CalendarDays, Loader2 } from "lucide-react";
+
+export default function ProjectDetail() {
+  const { id } = useParams<{ id: string }>();
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [project, setProject] = useState<any>(null);
+  const [scheduleVersions, setScheduleVersions] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [parsing, setParsing] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    if (!id) return;
+    const [projRes, versionsRes] = await Promise.all([
+      supabase.from("projects").select("*").eq("id", id).single(),
+      supabase.from("schedule_versions").select("*").eq("project_id", id).order("version_number", { ascending: false }),
+    ]);
+    setProject(projRes.data);
+    setScheduleVersions(versionsRes.data || []);
+
+    if (versionsRes.data && versionsRes.data.length > 0) {
+      const latestVersion = versionsRes.data[0];
+      const { data: tasksData } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("schedule_version_id", latestVersion.id)
+        .order("name");
+      setTasks(tasksData || []);
+    }
+  }, [id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id || !profile?.company_id) return;
+
+    setUploading(true);
+    const filePath = `${profile.company_id}/${id}/${Date.now()}_${file.name}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("schedules")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
+      setUploading(false);
+      return;
+    }
+
+    const nextVersion = (scheduleVersions[0]?.version_number || 0) + 1;
+    const { data: versionData, error: versionError } = await supabase
+      .from("schedule_versions")
+      .insert({
+        project_id: id,
+        company_id: profile.company_id,
+        file_url: filePath,
+        version_number: nextVersion,
+      })
+      .select()
+      .single();
+
+    setUploading(false);
+
+    if (versionError) {
+      toast({ title: "Error", description: versionError.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Schedule uploaded!", description: `Version ${nextVersion} — now parsing...` });
+    setParsing(true);
+
+    // Call the parse edge function
+    try {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke("parse-schedule", {
+        body: {
+          schedule_version_id: versionData.id,
+          file_url: filePath,
+          company_id: profile.company_id,
+        },
+      });
+
+      if (fnError) throw fnError;
+      toast({
+        title: "Schedule parsed!",
+        description: `${fnData?.task_count || 0} tasks loaded successfully.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Parsing notice",
+        description: "Schedule uploaded. AI parsing will be available once the edge function is deployed.",
+      });
+    }
+
+    setParsing(false);
+    fetchData();
+  };
+
+  if (!project) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" onClick={() => navigate("/projects")}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">{project.name}</h1>
+          <p className="text-sm text-muted-foreground capitalize">{project.status}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Upload */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Upload className="h-4 w-4" /> Upload Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
+              {uploading || parsing ? (
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {uploading ? "Uploading..." : "AI is parsing your schedule..."}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <FileText className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Drop PDF, Excel, or CSV
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    MS Project / Primavera exports
+                  </p>
+                </>
+              )}
+              <input
+                type="file"
+                className="hidden"
+                accept=".pdf,.xlsx,.xls,.csv"
+                onChange={handleFileUpload}
+                disabled={uploading || parsing}
+              />
+            </label>
+          </CardContent>
+        </Card>
+
+        {/* Schedule History */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Schedule Versions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {scheduleVersions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No schedules uploaded yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {scheduleVersions.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Version {v.version_number}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(v.uploaded_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tasks from latest schedule */}
+      {tasks.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Parsed Tasks ({tasks.length})</CardTitle>
+            <Button onClick={() => navigate(`/projects/${id}/lookahead/new`)}>
+              <CalendarDays className="mr-2 h-4 w-4" /> Create 2-Week Look-Ahead
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="pb-2 font-medium text-muted-foreground">Task</th>
+                    <th className="pb-2 font-medium text-muted-foreground">Start</th>
+                    <th className="pb-2 font-medium text-muted-foreground">Finish</th>
+                    <th className="pb-2 font-medium text-muted-foreground">% Complete</th>
+                    <th className="pb-2 font-medium text-muted-foreground">Tags</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.slice(0, 20).map((task) => (
+                    <tr key={task.id} className="border-b last:border-0">
+                      <td className="py-2 font-medium">{task.name}</td>
+                      <td className="py-2 text-muted-foreground">{task.start_date || "—"}</td>
+                      <td className="py-2 text-muted-foreground">{task.finish_date || "—"}</td>
+                      <td className="py-2">{task.percent_complete}%</td>
+                      <td className="py-2">
+                        <div className="flex gap-1 flex-wrap">
+                          {(task.tags || []).map((tag: string) => (
+                            <span key={tag} className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {tasks.length > 20 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Showing 20 of {tasks.length} tasks
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
