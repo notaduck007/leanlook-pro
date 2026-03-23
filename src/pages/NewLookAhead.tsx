@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CalendarDays, Loader2 } from "lucide-react";
-import { format, startOfWeek, addWeeks } from "date-fns";
+import { format, startOfWeek, addWeeks, addDays, parseISO, isBefore, isAfter } from "date-fns";
 
 export default function NewLookAhead() {
   const { id: projectId } = useParams<{ id: string }>();
