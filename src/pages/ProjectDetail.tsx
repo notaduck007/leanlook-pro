@@ -5,7 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, FileText, CalendarDays, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -15,17 +17,20 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<any>(null);
   const [scheduleVersions, setScheduleVersions] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [lookAheads, setLookAheads] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
-    const [projRes, versionsRes] = await Promise.all([
+    const [projRes, versionsRes, laRes] = await Promise.all([
       supabase.from("projects").select("*").eq("id", id).single(),
       supabase.from("schedule_versions").select("*").eq("project_id", id).order("version_number", { ascending: false }),
+      supabase.from("look_aheads").select("*").eq("project_id", id).order("week_start_date", { ascending: false }),
     ]);
     setProject(projRes.data);
     setScheduleVersions(versionsRes.data || []);
+    setLookAheads(laRes.data || []);
 
     if (versionsRes.data && versionsRes.data.length > 0) {
       const latestVersion = versionsRes.data[0];
@@ -79,7 +84,6 @@ export default function ProjectDetail() {
     toast({ title: "Schedule uploaded!", description: `Version ${nextVersion} — now parsing...` });
     setParsing(true);
 
-    // Call the parse edge function
     try {
       const { data: fnData, error: fnError } = await supabase.functions.invoke("parse-schedule", {
         body: {
@@ -88,21 +92,24 @@ export default function ProjectDetail() {
           company_id: profile.company_id,
         },
       });
-
       if (fnError) throw fnError;
-      toast({
-        title: "Schedule parsed!",
-        description: `${fnData?.task_count || 0} tasks loaded successfully.`,
-      });
-    } catch (err: any) {
-      toast({
-        title: "Parsing notice",
-        description: "Schedule uploaded. AI parsing will be available once the edge function is deployed.",
-      });
+      toast({ title: "Schedule parsed!", description: `${fnData?.task_count || 0} tasks loaded successfully.` });
+    } catch {
+      toast({ title: "Parsing notice", description: "Schedule uploaded. AI parsing will be available once the edge function is deployed." });
     }
 
     setParsing(false);
     fetchData();
+  };
+
+  const statusColor = (s: string) => {
+    switch (s) {
+      case "draft": return "secondary";
+      case "submitted": return "default";
+      case "approved": return "default";
+      case "rejected": return "destructive";
+      default: return "secondary";
+    }
   };
 
   if (!project) {
@@ -145,21 +152,11 @@ export default function ProjectDetail() {
               ) : (
                 <>
                   <FileText className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground text-center">
-                    Drop PDF, Excel, or CSV
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    MS Project / Primavera exports
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center">Drop PDF, Excel, or CSV</p>
+                  <p className="text-xs text-muted-foreground mt-1">MS Project / Primavera exports</p>
                 </>
               )}
-              <input
-                type="file"
-                className="hidden"
-                accept=".pdf,.xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-                disabled={uploading || parsing}
-              />
+              <input type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv" onChange={handleFileUpload} disabled={uploading || parsing} />
             </label>
           </CardContent>
         </Card>
@@ -171,9 +168,7 @@ export default function ProjectDetail() {
           </CardHeader>
           <CardContent>
             {scheduleVersions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                No schedules uploaded yet.
-              </p>
+              <p className="text-sm text-muted-foreground py-4 text-center">No schedules uploaded yet.</p>
             ) : (
               <div className="space-y-2">
                 {scheduleVersions.map((v) => (
@@ -182,9 +177,7 @@ export default function ProjectDetail() {
                       <FileText className="h-4 w-4 text-primary" />
                       <div>
                         <p className="text-sm font-medium">Version {v.version_number}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(v.uploaded_at).toLocaleDateString()}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{new Date(v.uploaded_at).toLocaleDateString()}</p>
                       </div>
                     </div>
                   </div>
@@ -195,14 +188,58 @@ export default function ProjectDetail() {
         </Card>
       </div>
 
+      {/* Look-Aheads */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarDays className="h-4 w-4" /> Look-Aheads
+          </CardTitle>
+          <Button size="sm" onClick={() => navigate(`/projects/${id}/lookahead/new`)}>
+            <CalendarDays className="mr-2 h-4 w-4" /> New Look-Ahead
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {lookAheads.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No look-aheads created yet. Create one to start tracking daily progress.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {lookAheads.map((la) => (
+                <div
+                  key={la.id}
+                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => navigate(`/projects/${id}/lookahead/${la.id}`)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-4 w-4 text-primary" />
+                    <div>
+                      <p className="text-sm font-medium">
+                        Week of {format(new Date(la.week_start_date + "T00:00:00"), "MMM d, yyyy")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Created {format(new Date(la.created_at), "MMM d")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={statusColor(la.status) as any} className="capitalize text-xs">
+                      {la.status}
+                    </Badge>
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Tasks from latest schedule */}
       {tasks.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle className="text-base">Parsed Tasks ({tasks.length})</CardTitle>
-            <Button onClick={() => navigate(`/projects/${id}/lookahead/new`)}>
-              <CalendarDays className="mr-2 h-4 w-4" /> Create 2-Week Look-Ahead
-            </Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -237,9 +274,7 @@ export default function ProjectDetail() {
                 </tbody>
               </table>
               {tasks.length > 20 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Showing 20 of {tasks.length} tasks
-                </p>
+                <p className="text-sm text-muted-foreground mt-2">Showing 20 of {tasks.length} tasks</p>
               )}
             </div>
           </CardContent>
