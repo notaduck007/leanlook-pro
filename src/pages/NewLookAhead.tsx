@@ -79,7 +79,11 @@ export default function NewLookAhead() {
       .limit(1);
 
     if (versions?.length) {
-      const end = format(addWeeks(new Date(weekStart), 2), "yyyy-MM-dd");
+      const wsDate = parseISO(weekStart);
+      const weDate = addDays(wsDate, 13);
+      const end = format(weDate, "yyyy-MM-dd");
+      const dates = Array.from({ length: 14 }, (_, i) => format(addDays(wsDate, i), "yyyy-MM-dd"));
+
       const { data: tasks } = await supabase
         .from("tasks")
         .select("*")
@@ -87,15 +91,57 @@ export default function NewLookAhead() {
         .or(`start_date.lte.${end},finish_date.gte.${weekStart}`)
         .order("name");
 
+      // Fetch task templates for auto-filling materials/constraints
+      const { data: templates } = await supabase
+        .from("task_templates")
+        .select("*")
+        .eq("company_id", profile.company_id);
+
+      const templateMap = new Map<string, any>();
+      (templates || []).forEach((t) => templateMap.set(t.tag.toLowerCase(), t));
+
       if (tasks?.length) {
-        const lines = tasks.map((task, i) => ({
-          lookahead_id: la.id,
-          company_id: profile.company_id,
-          task_id: task.id,
-          sort_order: i,
-          assigned_trade: (task.tags as string[] || [])[0] || null,
-          status_per_day: {},
-        }));
+        const lines = tasks.map((task, i) => {
+          // Compute status_per_day based on task dates
+          const statusPerDay: Record<string, string> = {};
+          const taskStart = task.start_date ? parseISO(task.start_date) : null;
+          const taskEnd = task.finish_date ? parseISO(task.finish_date) : taskStart;
+          dates.forEach((date) => {
+            const d = parseISO(date);
+            const afterStart = taskStart ? !isBefore(d, taskStart) : true;
+            const beforeEnd = taskEnd ? !isAfter(d, taskEnd) : true;
+            if (afterStart && beforeEnd) {
+              statusPerDay[date] = "planned";
+            }
+          });
+
+          // Auto-fill from templates based on task tags
+          const taskTags = (task.tags as string[]) || [];
+          let materials: string | null = null;
+          let constraints: string | null = null;
+          for (const tag of taskTags) {
+            const tmpl = templateMap.get(tag.toLowerCase());
+            if (tmpl) {
+              const items = (tmpl.checklist_items as any[]) || [];
+              const matItems = items.filter((c: any) => c.type === "material").map((c: any) => c.text);
+              const conItems = items.filter((c: any) => c.type === "constraint").map((c: any) => c.text);
+              if (matItems.length) materials = matItems.join(", ");
+              if (conItems.length) constraints = conItems.join(", ");
+              break;
+            }
+          }
+
+          return {
+            lookahead_id: la.id,
+            company_id: profile.company_id,
+            task_id: task.id,
+            sort_order: i,
+            assigned_trade: taskTags.join(", ") || null,
+            status_per_day: statusPerDay,
+            materials_needed: materials,
+            constraints,
+          };
+        });
 
         await supabase.from("lookahead_lines").insert(lines);
       }
