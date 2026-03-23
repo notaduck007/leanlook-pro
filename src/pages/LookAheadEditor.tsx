@@ -113,6 +113,12 @@ export default function LookAheadEditor() {
     scheduleSave();
   };
 
+  const handleDeleteLine = async (lineId: string) => {
+    await supabase.from("lookahead_lines").delete().eq("id", lineId);
+    setLines((prev) => prev.filter((l) => l.id !== lineId));
+    toast({ title: "Row deleted" });
+  };
+
   const saveDraft = async () => {
     setSaving(true);
     const updates = lines.map((l) =>
