@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Camera } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface LookaheadLineData {
@@ -25,10 +25,11 @@ interface LookaheadRowProps {
   dates: string[];
   onStatusChange: (lineId: string, date: string, status: DayStatus) => void;
   onFieldChange: (lineId: string, field: string, value: string) => void;
+  onDeleteLine?: (lineId: string) => void;
   readOnly?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, readOnly }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, readOnly }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const depth = line.depth || 0;
 
@@ -120,9 +121,21 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, readO
             />
           )}
         </td>
+
+        {/* Delete */}
+        {!readOnly && onDeleteLine && (
+          <td className="py-1.5 px-1 w-8">
+            <button
+              onClick={() => onDeleteLine(line.id)}
+              className="p-1 text-muted-foreground hover:text-destructive rounded hover:bg-destructive/10 transition-colors"
+              title="Delete row"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </td>
+        )}
       </tr>
 
-      {/* Children rows (if parent is not collapsed) */}
       {!collapsed && line.children?.map((child) => (
         <LookaheadRow
           key={child.id}
@@ -130,6 +143,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, readO
           dates={dates}
           onStatusChange={onStatusChange}
           onFieldChange={onFieldChange}
+          onDeleteLine={onDeleteLine}
           readOnly={readOnly}
         />
       ))}
