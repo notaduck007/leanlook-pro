@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search } from "lucide-react";
-import { format, addDays, parseISO, subWeeks } from "date-fns";
+import { format, addDays, parseISO, subWeeks, isWithinInterval, isBefore, isAfter } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
@@ -221,24 +221,141 @@ export default function LookAheadEditor() {
     }
   };
 
-  const handleSmartFill = () => {
-    if (!lookAhead) return;
+  const handleSmartFill = async () => {
+    if (!lookAhead || !projectId || !profile?.company_id) return;
+
+    const weekStart = parseISO(lookAhead.week_start_date);
+    const weekEnd = addDays(weekStart, 13); // 14-day window
+    const weekStartStr = format(weekStart, "yyyy-MM-dd");
+    const weekEndStr = format(weekEnd, "yyyy-MM-dd");
+
+    // 1. Get latest schedule version for this project
+    const { data: versions } = await supabase
+      .from("schedule_versions")
+      .select("id")
+      .eq("project_id", projectId)
+      .order("version_number", { ascending: false })
+      .limit(1);
+
+    if (!versions?.length) {
+      toast({ title: "No schedule uploaded", description: "Upload a master schedule first so Smart Fill can use task dates.", variant: "destructive" });
+      return;
+    }
+
+    // 2. Fetch all tasks that overlap the 2-week window
+    const { data: allTasks } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("schedule_version_id", versions[0].id);
+
+    if (!allTasks?.length) {
+      toast({ title: "No tasks found in schedule", variant: "destructive" });
+      return;
+    }
+
+    // Filter to tasks that overlap the look-ahead window
+    const overlappingTasks = allTasks.filter((t) => {
+      if (!t.start_date && !t.finish_date) return false;
+      const taskStart = t.start_date ? parseISO(t.start_date) : null;
+      const taskEnd = t.finish_date ? parseISO(t.finish_date) : taskStart;
+      if (!taskStart && !taskEnd) return false;
+      // Task overlaps if it starts before window ends AND finishes after window starts
+      const startsBeforeEnd = taskStart ? !isAfter(taskStart, weekEnd) : true;
+      const endsAfterStart = taskEnd ? !isBefore(taskEnd, weekStart) : true;
+      return startsBeforeEnd && endsAfterStart;
+    });
+
+    if (!overlappingTasks.length) {
+      toast({ title: "No tasks overlap this 2-week window", description: "Check your master schedule dates." });
+      return;
+    }
+
+    // 3. Find which tasks already have lines in this look-ahead
+    const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
+    const newTasks = overlappingTasks.filter((t) => !existingTaskIds.has(t.id));
+
+    // 4. Insert new lookahead_lines for missing tasks
+    let addedCount = 0;
+    if (newTasks.length > 0) {
+      const maxSort = lines.reduce((max, l) => Math.max(max, l.sort_order), 0);
+      const newLineInserts = newTasks.map((t, i) => ({
+        lookahead_id: lookaheadId!,
+        company_id: profile.company_id!,
+        task_id: t.id,
+        sort_order: maxSort + i + 1,
+        status_per_day: {},
+        assigned_trade: (t.tags as string[] || []).join(", ") || null,
+      }));
+
+      const { data: inserted, error } = await supabase
+        .from("lookahead_lines")
+        .insert(newLineInserts)
+        .select("*");
+
+      if (error) {
+        console.error("Error inserting lines:", error);
+      } else if (inserted) {
+        addedCount = inserted.length;
+        // Map inserted lines to LookaheadLineData
+        const taskMap = overlappingTasks.reduce((acc, t) => ({ ...acc, [t.id]: t }), {} as Record<string, any>);
+        const newMappedLines: LookaheadLineData[] = inserted.map((l) => ({
+          id: l.id,
+          task_id: l.task_id,
+          custom_text: l.custom_text,
+          task_name: l.task_id ? taskMap[l.task_id]?.name || "Unknown Task" : l.custom_text || "",
+          assigned_trade: l.assigned_trade,
+          materials_needed: l.materials_needed,
+          constraints: l.constraints,
+          notes: l.notes,
+          photos: (l.photos as string[]) || [],
+          status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
+          sort_order: l.sort_order || 0,
+        }));
+        setLines((prev) => [...prev, ...newMappedLines]);
+      }
+    }
+
+    // 5. Build a task lookup for date-aware filling
+    const taskDateMap: Record<string, { start: Date | null; end: Date | null }> = {};
+    for (const t of overlappingTasks) {
+      taskDateMap[t.id] = {
+        start: t.start_date ? parseISO(t.start_date) : null,
+        end: t.finish_date ? parseISO(t.finish_date) : (t.start_date ? parseISO(t.start_date) : null),
+      };
+    }
+
+    // 6. Fill "planned" only on days within each task's actual schedule dates
     let filled = 0;
     setLines((prev) =>
       prev.map((l) => {
         const newStatus = { ...l.status_per_day };
+        const taskDates = l.task_id ? taskDateMap[l.task_id] : null;
+
         dates.forEach((date) => {
-          if (!newStatus[date]) {
-            newStatus[date] = "planned";
-            filled++;
+          if (newStatus[date]) return; // Don't overwrite existing status
+
+          if (taskDates) {
+            // Only mark planned if this date falls within task's schedule
+            const d = parseISO(date);
+            const afterStart = taskDates.start ? !isBefore(d, taskDates.start) : true;
+            const beforeEnd = taskDates.end ? !isAfter(d, taskDates.end) : true;
+            if (afterStart && beforeEnd) {
+              newStatus[date] = "planned";
+              filled++;
+            }
           }
+          // Custom lines (no task_id) — don't auto-fill, user manages manually
         });
+
         return { ...l, status_per_day: newStatus };
       })
     );
-    // Use a microtask to ensure state is updated before saving
+
     setTimeout(() => saveDraftRef.current(), 500);
-    toast({ title: "Smart Fill applied", description: `Planned status set for ${filled} empty cells.` });
+    toast({
+      title: "Smart Fill complete",
+      description: `${addedCount} tasks added from schedule, ${filled} cells marked as planned based on task dates.`,
+    });
   };
 
   const handlePullFromLastWeek = async () => {
