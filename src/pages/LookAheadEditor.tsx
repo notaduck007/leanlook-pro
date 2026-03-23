@@ -89,9 +89,6 @@ export default function LookAheadEditor() {
     fetchData();
   }, [fetchData]);
 
-  const saveDraftRef = useRef(saveDraft);
-  saveDraftRef.current = saveDraft;
-
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => saveDraftRef.current(), 2000);
