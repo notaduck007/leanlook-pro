@@ -237,6 +237,25 @@ export default function ProjectDetail() {
         </CardContent>
       </Card>
 
+      {/* Gantt Chart */}
+      {tasks.length > 0 && (
+        <Card>
+          <Collapsible defaultOpen>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Schedule Timeline</CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">Toggle</Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                <GanttChart tasks={tasks} />
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      )}
+
       {/* Tasks from latest schedule */}
       {tasks.length > 0 && (
         <Card>

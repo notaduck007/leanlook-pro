@@ -1,6 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TaskTemplateManager } from "@/components/project/TaskTemplateManager";
 
 export default function Settings() {
   const { profile, roles } = useAuth();
@@ -28,6 +29,8 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <TaskTemplateManager />
     </div>
   );
 }
