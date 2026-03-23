@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Camera } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface LookaheadLineData {
@@ -25,10 +25,11 @@ interface LookaheadRowProps {
   dates: string[];
   onStatusChange: (lineId: string, date: string, status: DayStatus) => void;
   onFieldChange: (lineId: string, field: string, value: string) => void;
+  onDeleteLine?: (lineId: string) => void;
   readOnly?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, readOnly }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, readOnly }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const depth = line.depth || 0;
 

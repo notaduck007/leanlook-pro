@@ -588,6 +588,7 @@ export default function LookAheadEditor() {
                   dates={dates}
                   onStatusChange={handleStatusChange}
                   onFieldChange={handleFieldChange}
+                  onDeleteLine={handleDeleteLine}
                   readOnly={isReadOnly}
                 />
               ))
