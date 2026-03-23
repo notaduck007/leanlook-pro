@@ -41,7 +41,8 @@ export default function Auth() {
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        toast({ title: "Account created!", description: "Check your email to confirm your account." });
+        toast({ title: "Account created!", description: "You can now sign in." });
+        setIsSignUp(false);
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
