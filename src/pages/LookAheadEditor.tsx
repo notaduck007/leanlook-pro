@@ -276,22 +276,45 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // 3. Find which tasks already have lines in this look-ahead
-    const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
-    const newTasks = overlappingTasks.filter((t) => !existingTaskIds.has(t.id));
+    // 4. Fetch task templates for auto-filling materials/constraints
+    const { data: templates } = await supabase
+      .from("task_templates")
+      .select("*")
+      .eq("company_id", profile.company_id!);
 
-    // 4. Insert new lookahead_lines for missing tasks
+    const templateMap = new Map<string, any>();
+    (templates || []).forEach((t) => templateMap.set(t.tag.toLowerCase(), t));
+
+    // 5. Insert new lookahead_lines for missing tasks
     let addedCount = 0;
     if (newTasks.length > 0) {
       const maxSort = lines.reduce((max, l) => Math.max(max, l.sort_order), 0);
-      const newLineInserts = newTasks.map((t, i) => ({
-        lookahead_id: lookaheadId!,
-        company_id: profile.company_id!,
-        task_id: t.id,
-        sort_order: maxSort + i + 1,
-        status_per_day: {},
-        assigned_trade: (t.tags as string[] || []).join(", ") || null,
-      }));
+      const newLineInserts = newTasks.map((t, i) => {
+        const taskTags = (t.tags as string[]) || [];
+        let materials: string | null = null;
+        let constraints: string | null = null;
+        for (const tag of taskTags) {
+          const tmpl = templateMap.get(tag.toLowerCase());
+          if (tmpl) {
+            const items = (tmpl.checklist_items as any[]) || [];
+            const matItems = items.filter((c: any) => c.type === "material").map((c: any) => c.text);
+            const conItems = items.filter((c: any) => c.type === "constraint").map((c: any) => c.text);
+            if (matItems.length) materials = matItems.join(", ");
+            if (conItems.length) constraints = conItems.join(", ");
+            break;
+          }
+        }
+        return {
+          lookahead_id: lookaheadId!,
+          company_id: profile.company_id!,
+          task_id: t.id,
+          sort_order: maxSort + i + 1,
+          status_per_day: {},
+          assigned_trade: taskTags.join(", ") || null,
+          materials_needed: materials,
+          constraints,
+        };
+      });
 
       const { data: inserted, error } = await supabase
         .from("lookahead_lines")
