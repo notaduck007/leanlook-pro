@@ -2,9 +2,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TaskTemplateManager } from "@/components/project/TaskTemplateManager";
+import { useTheme } from "@/hooks/use-theme";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function Settings() {
   const { profile, roles } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -26,6 +30,22 @@ export default function Settings() {
                 <Badge key={role} variant="secondary" className="capitalize">{role}</Badge>
               ))}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Appearance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="dark-mode">Dark Mode</Label>
+            <Switch
+              id="dark-mode"
+              checked={theme === "dark"}
+              onCheckedChange={toggleTheme}
+            />
           </div>
         </CardContent>
       </Card>
