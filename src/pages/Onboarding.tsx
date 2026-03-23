@@ -35,8 +35,8 @@ export default function Onboarding() {
 
     await refreshProfile();
     toast({ title: "Company created!", description: `Welcome to ${companyName}` });
-    navigate("/");
-    setLoading(false);
+    // Use window.location to ensure a full re-render with updated profile
+    window.location.href = "/";
   };
 
   return (
