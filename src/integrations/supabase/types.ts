@@ -442,6 +442,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      onboard_company: {
+        Args: { _company_name: string; _slug: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "pm" | "super"
