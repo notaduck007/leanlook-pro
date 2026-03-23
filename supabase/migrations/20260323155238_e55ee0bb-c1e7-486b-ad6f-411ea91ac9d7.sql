@@ -1,0 +1,1 @@
+UPDATE auth.users SET email_confirmed_at = now() WHERE id = 'c972999f-9607-418d-96ab-ec35cdd4ea2a';
