@@ -1,0 +1,2 @@
+UPDATE public.profiles SET company_id = '91a4a89b-6199-4fdc-9fdb-a9a07a976b63' WHERE user_id = '0ff0016b-cb31-4375-b2d7-b3099f14cb09';
+INSERT INTO public.user_roles (user_id, role) VALUES ('0ff0016b-cb31-4375-b2d7-b3099f14cb09', 'admin') ON CONFLICT (user_id, role) DO NOTHING;
