@@ -12,6 +12,8 @@ import Projects from "./pages/Projects";
 import NewProject from "./pages/NewProject";
 import ProjectDetail from "./pages/ProjectDetail";
 import Settings from "./pages/Settings";
+import NewLookAhead from "./pages/NewLookAhead";
+import LookAheadEditor from "./pages/LookAheadEditor";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
