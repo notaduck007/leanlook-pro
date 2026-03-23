@@ -121,9 +121,21 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
             />
           )}
         </td>
+
+        {/* Delete */}
+        {!readOnly && onDeleteLine && (
+          <td className="py-1.5 px-1 w-8">
+            <button
+              onClick={() => onDeleteLine(line.id)}
+              className="p-1 text-muted-foreground hover:text-destructive rounded hover:bg-destructive/10 transition-colors"
+              title="Delete row"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </td>
+        )}
       </tr>
 
-      {/* Children rows (if parent is not collapsed) */}
       {!collapsed && line.children?.map((child) => (
         <LookaheadRow
           key={child.id}
@@ -131,6 +143,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           dates={dates}
           onStatusChange={onStatusChange}
           onFieldChange={onFieldChange}
+          onDeleteLine={onDeleteLine}
           readOnly={readOnly}
         />
       ))}
