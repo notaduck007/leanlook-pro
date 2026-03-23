@@ -234,6 +234,9 @@ export default function LookAheadEditor() {
               </Button>
             </>
           )}
+          <Button variant="outline" size="sm" onClick={() => generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates)}>
+            <FileDown className="mr-1 h-3.5 w-3.5" /> Export PDF
+          </Button>
         </div>
       </div>
 
