@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { GanttChart } from "@/components/project/GanttChart";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
