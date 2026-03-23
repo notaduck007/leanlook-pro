@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search } from "lucide-react";
-import { format, addDays, parseISO, subWeeks } from "date-fns";
+import { format, addDays, parseISO, subWeeks, isWithinInterval, isBefore, isAfter } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
