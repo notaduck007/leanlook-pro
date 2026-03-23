@@ -26,6 +26,7 @@ export default function LookAheadEditor() {
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState("");
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveDraftRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const isAdmin = roles.includes("admin");
   const isPM = roles.includes("pm");
