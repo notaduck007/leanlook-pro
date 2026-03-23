@@ -224,20 +224,22 @@ export default function LookAheadEditor() {
 
   const handleSmartFill = () => {
     if (!lookAhead) return;
+    let filled = 0;
     setLines((prev) =>
       prev.map((l) => {
-        if (!l.task_id) return l;
         const newStatus = { ...l.status_per_day };
         dates.forEach((date) => {
           if (!newStatus[date]) {
             newStatus[date] = "planned";
+            filled++;
           }
         });
         return { ...l, status_per_day: newStatus };
       })
     );
-    scheduleSave();
-    toast({ title: "Smart Fill applied", description: "Planned status set for all empty cells." });
+    // Use a microtask to ensure state is updated before saving
+    setTimeout(() => saveDraftRef.current(), 500);
+    toast({ title: "Smart Fill applied", description: `Planned status set for ${filled} empty cells.` });
   };
 
   const handlePullFromLastWeek = async () => {
