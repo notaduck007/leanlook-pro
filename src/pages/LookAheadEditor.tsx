@@ -130,6 +130,17 @@ export default function LookAheadEditor() {
     setSaving(false);
   };
 
+  const sendNotification = async (targetUserId: string, title: string, message: string) => {
+    if (!profile?.company_id) return;
+    await supabase.from("notifications").insert({
+      user_id: targetUserId,
+      company_id: profile.company_id,
+      title,
+      message,
+      link: `/projects/${projectId}/lookahead/${lookaheadId}`,
+    });
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     await saveDraft();
@@ -137,6 +148,20 @@ export default function LookAheadEditor() {
       .from("look_aheads")
       .update({ status: "submitted" })
       .eq("id", lookaheadId!);
+
+    // Notify admins/PMs
+    if (profile?.company_id) {
+      const { data: adminRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .in("role", ["admin", "pm"]);
+      for (const r of adminRoles || []) {
+        if (r.user_id !== user?.id) {
+          sendNotification(r.user_id, "Look-ahead submitted", `${profile?.display_name || "A superintendent"} submitted a look-ahead for ${project?.name}`);
+        }
+      }
+    }
+
     setSubmitting(false);
     toast({ title: "Look-ahead submitted for review!" });
     navigate(`/projects/${projectId}`);
@@ -144,12 +169,18 @@ export default function LookAheadEditor() {
 
   const handleApprove = async () => {
     await supabase.from("look_aheads").update({ status: "approved" }).eq("id", lookaheadId!);
+    if (lookAhead?.super_id) {
+      sendNotification(lookAhead.super_id, "Look-ahead approved!", `Your look-ahead for ${project?.name} has been approved.`);
+    }
     toast({ title: "Look-ahead approved!" });
     setLookAhead((prev: any) => ({ ...prev, status: "approved" }));
   };
 
   const handleReject = async () => {
     await supabase.from("look_aheads").update({ status: "rejected" }).eq("id", lookaheadId!);
+    if (lookAhead?.super_id) {
+      sendNotification(lookAhead.super_id, "Look-ahead needs revision", `Your look-ahead for ${project?.name} was sent back for changes.`);
+    }
     toast({ title: "Look-ahead sent back for revision.", variant: "destructive" });
     setLookAhead((prev: any) => ({ ...prev, status: "rejected" }));
   };
