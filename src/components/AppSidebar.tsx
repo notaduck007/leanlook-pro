@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderKanban, Settings, LogOut, HardHat, BarChart3 } from "lucide-react";
+import { LayoutDashboard, FolderKanban, Settings, LogOut, HardHat, BarChart3, CalendarDays } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Projects", url: "/projects", icon: FolderKanban },
+  { title: "Look-Aheads", url: "/lookaheads", icon: CalendarDays },
 ];
 
 const adminItems = [

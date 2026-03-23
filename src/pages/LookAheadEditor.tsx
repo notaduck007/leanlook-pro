@@ -3,9 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown } from "lucide-react";
-import { format, addDays, parseISO, isWithinInterval } from "date-fns";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search } from "lucide-react";
+import { format, addDays, parseISO, subWeeks } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
@@ -13,7 +14,7 @@ import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 
 export default function LookAheadEditor() {
   const { id: projectId, lookaheadId } = useParams<{ id: string; lookaheadId: string }>();
-  const { user, profile } = useAuth();
+  const { user, profile, roles } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -23,7 +24,12 @@ export default function LookAheadEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [filter, setFilter] = useState("");
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isAdmin = roles.includes("admin");
+  const isPM = roles.includes("pm");
+  const canReview = isAdmin || isPM;
 
   const dates: string[] = lookAhead
     ? Array.from({ length: 14 }, (_, i) =>
@@ -42,7 +48,6 @@ export default function LookAheadEditor() {
     setLookAhead(laRes.data);
     setProject(projRes.data);
 
-    // Fetch lines with task info
     const { data: linesData } = await supabase
       .from("lookahead_lines")
       .select("*")
@@ -50,7 +55,6 @@ export default function LookAheadEditor() {
       .order("sort_order");
 
     if (linesData) {
-      // Get task names for lines with task_ids
       const taskIds = linesData.filter((l) => l.task_id).map((l) => l.task_id!);
       let taskMap: Record<string, any> = {};
       if (taskIds.length > 0) {
@@ -85,7 +89,6 @@ export default function LookAheadEditor() {
     fetchData();
   }, [fetchData]);
 
-  // Auto-save debounce
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => saveDraft(), 2000);
@@ -137,6 +140,18 @@ export default function LookAheadEditor() {
     setSubmitting(false);
     toast({ title: "Look-ahead submitted for review!" });
     navigate(`/projects/${projectId}`);
+  };
+
+  const handleApprove = async () => {
+    await supabase.from("look_aheads").update({ status: "approved" }).eq("id", lookaheadId!);
+    toast({ title: "Look-ahead approved!" });
+    setLookAhead((prev: any) => ({ ...prev, status: "approved" }));
+  };
+
+  const handleReject = async () => {
+    await supabase.from("look_aheads").update({ status: "rejected" }).eq("id", lookaheadId!);
+    toast({ title: "Look-ahead sent back for revision.", variant: "destructive" });
+    setLookAhead((prev: any) => ({ ...prev, status: "rejected" }));
   };
 
   const handleAddCustomLine = async () => {
@@ -191,6 +206,97 @@ export default function LookAheadEditor() {
     toast({ title: "Smart Fill applied", description: "Planned status set for all empty cells." });
   };
 
+  const handlePullFromLastWeek = async () => {
+    if (!projectId || !lookaheadId || !profile?.company_id || !lookAhead) return;
+
+    // Find the previous look-ahead
+    const prevWeekStart = format(subWeeks(parseISO(lookAhead.week_start_date), 2), "yyyy-MM-dd");
+    const { data: prevLAs } = await supabase
+      .from("look_aheads")
+      .select("id")
+      .eq("project_id", projectId)
+      .lt("week_start_date", lookAhead.week_start_date)
+      .order("week_start_date", { ascending: false })
+      .limit(1);
+
+    if (!prevLAs?.length) {
+      toast({ title: "No previous look-ahead found", variant: "destructive" });
+      return;
+    }
+
+    // Get incomplete lines from the previous look-ahead
+    const { data: prevLines } = await supabase
+      .from("lookahead_lines")
+      .select("*")
+      .eq("lookahead_id", prevLAs[0].id);
+
+    if (!prevLines?.length) {
+      toast({ title: "No lines to pull forward" });
+      return;
+    }
+
+    // Filter to lines that had N or incomplete status on last days
+    const incompleteLines = prevLines.filter((pl) => {
+      const statuses = Object.values((pl.status_per_day as Record<string, string>) || {});
+      return statuses.includes("N") || statuses.includes("planned") || statuses.includes("progress");
+    });
+
+    if (!incompleteLines.length) {
+      toast({ title: "All previous tasks were completed!" });
+      return;
+    }
+
+    // Get task names
+    const taskIds = incompleteLines.filter((l) => l.task_id).map((l) => l.task_id!);
+    let taskMap: Record<string, any> = {};
+    if (taskIds.length > 0) {
+      const { data: tasks } = await supabase.from("tasks").select("*").in("id", taskIds);
+      taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
+    }
+
+    // Check for existing task_ids to avoid duplicates
+    const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
+    const newLines = incompleteLines.filter((l) => !l.task_id || !existingTaskIds.has(l.task_id));
+
+    if (!newLines.length) {
+      toast({ title: "All carry-over tasks already exist in this look-ahead" });
+      return;
+    }
+
+    const inserts = newLines.map((pl, i) => ({
+      lookahead_id: lookaheadId,
+      company_id: profile.company_id,
+      task_id: pl.task_id,
+      custom_text: pl.custom_text,
+      assigned_trade: pl.assigned_trade,
+      materials_needed: pl.materials_needed,
+      constraints: pl.constraints,
+      notes: `Carried over: ${pl.notes || ""}`.trim(),
+      sort_order: lines.length + i,
+      status_per_day: {},
+    }));
+
+    const { data: inserted } = await supabase.from("lookahead_lines").insert(inserts).select();
+
+    if (inserted) {
+      const mapped: LookaheadLineData[] = inserted.map((l) => ({
+        id: l.id,
+        task_id: l.task_id,
+        custom_text: l.custom_text,
+        task_name: l.task_id ? taskMap[l.task_id]?.name || "Carry-over Task" : l.custom_text || "Carry-over",
+        assigned_trade: l.assigned_trade,
+        materials_needed: l.materials_needed,
+        constraints: l.constraints,
+        notes: l.notes,
+        photos: [],
+        status_per_day: {},
+        sort_order: l.sort_order || 0,
+      }));
+      setLines((prev) => [...prev, ...mapped]);
+      toast({ title: `Pulled ${inserted.length} incomplete tasks from last week` });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -199,7 +305,18 @@ export default function LookAheadEditor() {
     );
   }
 
-  const isReadOnly = lookAhead?.status === "submitted" || lookAhead?.status === "approved";
+  const isOwner = lookAhead?.super_id === user?.id;
+  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  const isRejected = lookAhead?.status === "rejected";
+
+  // Filter lines
+  const filteredLines = filter
+    ? lines.filter(
+        (l) =>
+          l.task_name.toLowerCase().includes(filter.toLowerCase()) ||
+          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase())
+      )
+    : lines;
 
   return (
     <div className="space-y-4">
@@ -217,9 +334,24 @@ export default function LookAheadEditor() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {!isReadOnly && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Review actions for PM/Admin on submitted look-aheads */}
+          {canReview && lookAhead?.status === "submitted" && (
             <>
+              <Button size="sm" variant="outline" className="text-green-600 border-green-300 hover:bg-green-50" onClick={handleApprove}>
+                <CheckCircle className="mr-1 h-3.5 w-3.5" /> Approve
+              </Button>
+              <Button size="sm" variant="outline" className="text-red-600 border-red-300 hover:bg-red-50" onClick={handleReject}>
+                <XCircle className="mr-1 h-3.5 w-3.5" /> Reject
+              </Button>
+            </>
+          )}
+          {/* Edit actions for the owner when not submitted/approved */}
+          {isOwner && (lookAhead?.status === "draft" || isRejected) && (
+            <>
+              <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
+                <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
+              </Button>
               <Button variant="outline" size="sm" onClick={handleSmartFill}>
                 <Sparkles className="mr-1 h-3.5 w-3.5" /> Smart Fill
               </Button>
@@ -240,8 +372,19 @@ export default function LookAheadEditor() {
         </div>
       </div>
 
-      {/* Legend */}
-      <StatusLegend />
+      {/* Filter + Legend */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <StatusLegend />
+        <div className="relative w-64">
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Filter by task or trade..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="pl-8 h-9 text-sm"
+          />
+        </div>
+      </div>
 
       {/* Table */}
       <div className="border rounded-lg overflow-auto bg-card">
@@ -273,14 +416,14 @@ export default function LookAheadEditor() {
             </tr>
           </thead>
           <tbody>
-            {lines.length === 0 ? (
+            {filteredLines.length === 0 ? (
               <tr>
                 <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
-                  No tasks yet. Add a custom line or upload a schedule first.
+                  {filter ? "No matching tasks." : "No tasks yet. Add a custom line or upload a schedule first."}
                 </td>
               </tr>
             ) : (
-              lines.map((line) => (
+              filteredLines.map((line) => (
                 <LookaheadRow
                   key={line.id}
                   line={line}
