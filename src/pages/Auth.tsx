@@ -61,8 +61,8 @@ export default function Auth() {
           </div>
           <div>
             <CardTitle className="text-2xl font-bold">LeanLook</CardTitle>
-            <CardDescription>
-              {isSignUp ? "Create your account" : "Sign in to your account"}
+          <CardDescription>
+              {forgotPassword ? "Enter your email to reset your password" : isSignUp ? "Create your account" : "Sign in to your account"}
             </CardDescription>
           </div>
         </CardHeader>
