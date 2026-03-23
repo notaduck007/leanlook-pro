@@ -68,7 +68,7 @@ export default function Auth() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
+            {isSignUp && !forgotPassword && (
               <Input
                 placeholder="Display name"
                 value={displayName}
@@ -82,26 +82,49 @@ export default function Auth() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <Input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
+            {!forgotPassword && (
+              <Input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Loading..." : isSignUp ? "Create Account" : "Sign In"}
+              {loading ? "Loading..." : forgotPassword ? "Send Reset Link" : isSignUp ? "Create Account" : "Sign In"}
             </Button>
           </form>
+          {!forgotPassword && !isSignUp && (
+            <div className="mt-2 text-center">
+              <button
+                onClick={() => setForgotPassword(true)}
+                className="text-sm text-muted-foreground hover:text-primary hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-primary hover:underline font-medium"
-            >
-              {isSignUp ? "Sign in" : "Sign up"}
-            </button>
+            {forgotPassword ? (
+              <button
+                onClick={() => setForgotPassword(false)}
+                className="text-primary hover:underline font-medium"
+              >
+                Back to sign in
+              </button>
+            ) : (
+              <>
+                {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+                <button
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-primary hover:underline font-medium"
+                >
+                  {isSignUp ? "Sign in" : "Sign up"}
+                </button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
