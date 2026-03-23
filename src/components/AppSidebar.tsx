@@ -23,6 +23,7 @@ const navItems = [
 ];
 
 const adminItems = [
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
