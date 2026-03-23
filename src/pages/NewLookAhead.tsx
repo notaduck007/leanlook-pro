@@ -43,7 +43,8 @@ export default function NewLookAhead() {
           .from("tasks")
           .select("id", { count: "exact" })
           .eq("schedule_version_id", versions[0].id)
-          .or(`start_date.lte.${end},finish_date.gte.${start}`)
+          .lte("start_date", end)
+          .gte("finish_date", start)
           .then(({ count }) => setTaskCount(count || 0));
       });
   }, [projectId, weekStart]);
@@ -88,7 +89,8 @@ export default function NewLookAhead() {
         .from("tasks")
         .select("*")
         .eq("schedule_version_id", versions[0].id)
-        .or(`start_date.lte.${end},finish_date.gte.${weekStart}`)
+        .lte("start_date", end)
+        .gte("finish_date", weekStart)
         .order("name");
 
       // Fetch task templates for auto-filling materials/constraints
