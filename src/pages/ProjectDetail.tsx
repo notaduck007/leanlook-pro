@@ -154,11 +154,11 @@ export default function ProjectDetail() {
               ) : (
                 <>
                   <FileText className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground text-center">Drop PDF, Excel, or CSV</p>
-                  <p className="text-xs text-muted-foreground mt-1">MS Project / Primavera exports</p>
-                </>
-              )}
-              <input type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv" onChange={handleFileUpload} disabled={uploading || parsing} />
+                   <p className="text-sm text-muted-foreground text-center">Drop PDF, Excel, CSV, or MPP</p>
+                   <p className="text-xs text-muted-foreground mt-1">MS Project (.mpp) / Primavera / Excel exports</p>
+                 </>
+               )}
+               <input type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv,.mpp,.mpt" onChange={handleFileUpload} disabled={uploading || parsing} />
             </label>
           </CardContent>
         </Card>

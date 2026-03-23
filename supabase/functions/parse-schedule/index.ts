@@ -7,6 +7,39 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Construction tag categories based on real schedule patterns
+const TAG_RULES: Record<string, string[]> = {
+  "MEP": ["mep", "mechanical", "electrical", "plumbing", "hvac", "ahu", "chiller", "boiler", "ductwork", "piping", "conduit", "panel", "transformer", "vav", "diffuser"],
+  "Structural": ["structural", "steel", "concrete", "foundation", "pier", "drilled pier", "grade beam", "slab", "footing", "rebar", "formwork", "shoring", "framing", "decking"],
+  "Demolition": ["demo", "demolition", "abatement", "sawcut", "removal", "strip", "gut"],
+  "Finishes": ["finish", "paint", "flooring", "tile", "ceiling", "drywall", "millwork", "casework", "specialties", "trim", "carpet", "vct", "epoxy"],
+  "Roofing": ["roof", "roofing", "membrane", "flashing", "waterproofing", "envelope"],
+  "Sitework": ["site", "sitework", "grading", "paving", "asphalt", "curb", "sidewalk", "landscape", "irrigation", "erosion", "clearing", "grub", "excavat", "backfill", "compaction"],
+  "Concrete": ["concrete", "pour", "slab", "cure", "form", "rebar", "cmu", "masonry", "block", "brick"],
+  "Electrical": ["electrical", "wiring", "conduit", "panel", "switchgear", "gear", "data", "security", "av", "low voltage", "fire alarm"],
+  "Plumbing": ["plumbing", "fixture", "sanitary", "water", "waste", "vent", "gas line", "underground util"],
+  "HVAC": ["hvac", "ahu", "chiller", "boiler", "duct", "diffuser", "thermostat", "refrigerant", "vav", "air handler"],
+  "Fire Protection": ["fire protect", "sprinkler", "fire alarm", "suppression", "standpipe"],
+  "Doors & Hardware": ["door", "hardware", "frame", "closer", "lock"],
+  "Windows & Glazing": ["window", "glazing", "glass", "storefront", "curtain wall"],
+  "Inspection": ["inspection", "inspect", "test", "commission", "punch", "walkthrough", "substantial completion"],
+  "Critical": ["critical", "milestone", "substantial completion", "final completion", "turnover", "permit", "board approval"],
+  "Preconstruction": ["precon", "submittal", "lead time", "procurement", "bid", "gmp", "pricing", "permit", "design"],
+  "Interior": ["interior", "framing", "drywall", "insulation", "prime", "paint", "ceiling grid", "rough-in"],
+  "Exterior": ["exterior", "framing", "sheathing", "brick", "stone", "stucco", "siding", "canopy", "entry"],
+};
+
+function autoTag(taskName: string): string[] {
+  const lower = taskName.toLowerCase();
+  const tags: string[] = [];
+  for (const [tag, keywords] of Object.entries(TAG_RULES)) {
+    if (keywords.some(kw => lower.includes(kw))) {
+      tags.push(tag);
+    }
+  }
+  return [...new Set(tags)];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -30,11 +63,39 @@ serve(async (req) => {
     // Determine file type and extract text
     const fileName = file_url.toLowerCase();
     let fileContent = "";
+    let isMpp = false;
 
     if (fileName.endsWith(".csv")) {
       fileContent = await fileData.text();
+    } else if (fileName.endsWith(".mpp") || fileName.endsWith(".mpt")) {
+      // MPP files are binary - send raw bytes as base64 for AI vision analysis
+      isMpp = true;
+      const buffer = await fileData.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      // Extract readable text strings from the binary MPP (UTF-16LE encoded task names)
+      const strings: string[] = [];
+      for (let i = 0; i < bytes.length - 1; i++) {
+        const chars: string[] = [];
+        while (i < bytes.length - 1) {
+          const lo = bytes[i], hi = bytes[i + 1];
+          if (hi === 0 && lo >= 32 && lo < 127) {
+            chars.push(String.fromCharCode(lo));
+            i += 2;
+          } else break;
+        }
+        if (chars.length >= 4) strings.push(chars.join(""));
+      }
+      // Deduplicate and filter task-like strings
+      const unique = [...new Set(strings)].filter(s => 
+        s.length >= 4 && 
+        !s.match(/^[A-F0-9]+$/i) && // skip hex strings
+        !s.match(/^\d+$/) && // skip pure numbers
+        !s.startsWith("Microsoft") &&
+        !s.startsWith("Windows") &&
+        !s.includes("\\")
+      );
+      fileContent = `[Microsoft Project (.mpp) file - extracted task names and metadata]:\n\n${unique.join("\n")}`;
     } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-      // For Excel, send as base64 to AI
       const buffer = await fileData.arrayBuffer();
       const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 50000)));
       fileContent = `[Excel file base64 preview - first 50KB]: ${base64}`;
@@ -46,6 +107,26 @@ serve(async (req) => {
     }
 
     // Call Lovable AI to parse
+    const systemPrompt = `You are a construction schedule parser specializing in extracting task hierarchies from construction project schedules (P6, MS Project, etc).
+
+Extract ALL tasks with their full hierarchy. Return a JSON array of tasks. Each task must have:
+- external_id: unique identifier (WBS code or sequential number)
+- name: exact task name as written
+- duration: duration string (e.g. "5 days", "2 weeks") or null
+- start_date: YYYY-MM-DD format or null
+- finish_date: YYYY-MM-DD format or null
+- percent_complete: number 0-100
+- parent_name: name of the parent/summary task for hierarchy, null for top-level
+- predecessors: array of external_ids this task depends on
+- tags: array of construction category tags
+
+Common construction schedule categories to tag:
+MEP, Structural, Demolition, Finishes, Roofing, Sitework, Concrete, Electrical, Plumbing, HVAC, Fire Protection, Doors & Hardware, Windows & Glazing, Inspection, Critical, Preconstruction, Interior, Exterior
+
+${isMpp ? `This is data extracted from a Microsoft Project (.mpp) file. The text contains task names extracted from the binary file. Reconstruct the likely hierarchy based on naming patterns (e.g. "Construction > Sitework > Grading"). Tasks like "Preconstruction", "Construction", "Sitework" are likely summary/parent tasks.` : ""}
+
+Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.`;
+
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -53,16 +134,10 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
-          {
-            role: "system",
-            content: `You are a construction schedule parser. Extract ALL tasks from the provided schedule data. Return a JSON array of tasks. Each task should have: external_id (string), name (string), duration (string like "5 days"), start_date (YYYY-MM-DD or null), finish_date (YYYY-MM-DD or null), percent_complete (number 0-100), parent_name (string or null for hierarchy), predecessors (array of external_ids), tags (array of relevant tags like "MEP", "Finishes", "Demolition", "Critical", "Structural", "Roofing", "Electrical", "Plumbing", "HVAC", "Concrete", "Inspection"). Auto-generate relevant tags based on the task name. Be thorough - extract every single task.`,
-          },
-          {
-            role: "user",
-            content: `Parse this construction schedule and extract all tasks:\n\n${fileContent}`,
-          },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Parse this construction schedule and extract all tasks:\n\n${fileContent}` },
         ],
         tools: [
           {
@@ -124,31 +199,34 @@ serve(async (req) => {
     const parsed = JSON.parse(toolCall.function.arguments);
     const extractedTasks = parsed.tasks || [];
 
-    // Build parent map for hierarchy
-    const parentMap = new Map<string, string>();
-    
-    // Insert tasks
-    const taskInserts = extractedTasks.map((t: any) => ({
-      schedule_version_id,
-      company_id,
-      external_id: t.external_id,
-      name: t.name,
-      duration: t.duration || null,
-      start_date: t.start_date || null,
-      finish_date: t.finish_date || null,
-      percent_complete: t.percent_complete || 0,
-      predecessors: t.predecessors || [],
-      tags: t.tags || [],
-      metadata: { parent_name: t.parent_name },
-    }));
+    // Enhance AI tags with rule-based auto-tagging
+    const taskInserts = extractedTasks.map((t: any) => {
+      const aiTags = t.tags || [];
+      const ruleTags = autoTag(t.name);
+      const allTags = [...new Set([...aiTags, ...ruleTags])];
 
-    if (taskInserts.length > 0) {
-      const { error: insertError } = await supabase
-        .from("tasks")
-        .insert(taskInserts);
+      return {
+        schedule_version_id,
+        company_id,
+        external_id: t.external_id,
+        name: t.name,
+        duration: t.duration || null,
+        start_date: t.start_date || null,
+        finish_date: t.finish_date || null,
+        percent_complete: t.percent_complete || 0,
+        predecessors: t.predecessors || [],
+        tags: allTags,
+        metadata: { parent_name: t.parent_name },
+      };
+    });
 
+    // Insert in batches of 50 to avoid payload limits
+    const batchSize = 50;
+    for (let i = 0; i < taskInserts.length; i += batchSize) {
+      const batch = taskInserts.slice(i, i + batchSize);
+      const { error: insertError } = await supabase.from("tasks").insert(batch);
       if (insertError) {
-        console.error("Insert error:", insertError);
+        console.error("Insert error at batch", i, insertError);
         throw insertError;
       }
     }
