@@ -130,6 +130,7 @@ export default function LookAheadEditor() {
     await Promise.all(updates);
     setSaving(false);
   };
+  saveDraftRef.current = saveDraft;
 
   const sendNotification = async (targetUserId: string, title: string, message: string) => {
     if (!profile?.company_id) return;
