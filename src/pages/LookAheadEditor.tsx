@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown } from "lucide-react";
 import { format, addDays, parseISO, isWithinInterval } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
