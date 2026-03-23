@@ -22,29 +22,16 @@ export default function Onboarding() {
 
     const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
-    const companyId = crypto.randomUUID();
+    const { error } = await supabase.rpc("onboard_company" as any, {
+      _company_name: companyName,
+      _slug: slug,
+    });
 
-    const { error: companyError } = await supabase
-      .from("companies")
-      .insert({ id: companyId, name: companyName, slug });
-
-    if (companyError) {
-      toast({ title: "Error", description: companyError.message, variant: "destructive" });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       setLoading(false);
       return;
     }
-
-    // Update profile with company_id
-    await supabase
-      .from("profiles")
-      .update({ company_id: companyId })
-      .eq("user_id", user.id);
-
-    // Grant admin role
-    await supabase.from("user_roles").upsert({
-      user_id: user.id,
-      role: "admin" as any,
-    });
 
     await refreshProfile();
     toast({ title: "Company created!", description: `Welcome to ${companyName}` });
