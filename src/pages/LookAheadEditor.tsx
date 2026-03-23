@@ -276,6 +276,10 @@ export default function LookAheadEditor() {
       return;
     }
 
+    // 3. Find which tasks already have lines
+    const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
+    const newTasks = overlappingTasks.filter((t) => !existingTaskIds.has(t.id));
+
     // 4. Fetch task templates for auto-filling materials/constraints
     const { data: templates } = await supabase
       .from("task_templates")
