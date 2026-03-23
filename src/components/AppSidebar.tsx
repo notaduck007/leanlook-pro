@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Projects", url: "/projects", icon: FolderKanban },
+  { title: "Look-Aheads", url: "/lookaheads", icon: CalendarDays },
 ];
 
 const adminItems = [
