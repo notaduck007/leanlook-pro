@@ -752,32 +752,72 @@ export default function LookAheadEditor() {
           )}
           {isOwner && (lookAhead?.status === "draft" || isRejected) && (
             <>
-              <PullTasksDialog
-                projectId={projectId!}
-                lookaheadId={lookaheadId!}
-                companyId={profile?.company_id || ""}
-                existingTaskIds={existingTaskIds}
-                dates={dates}
-                onTasksPulled={fetchData}
-              />
-              <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
-                <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleSmartFill}>
-                <Sparkles className="mr-1 h-3.5 w-3.5" /> Smart Fill
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleAddCustomLine}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Add Line
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
-                <Save className="mr-1 h-3.5 w-3.5" /> {saveStatus === "saving" ? "Saving..." : "Save"}
-              </Button>
-              <Button size="sm" onClick={handleSubmit} disabled={submitting}>
-                <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
-              </Button>
+              {/* Desktop: show all buttons */}
+              <div className="hidden md:flex items-center gap-2">
+                <PullTasksDialog
+                  projectId={projectId!}
+                  lookaheadId={lookaheadId!}
+                  companyId={profile?.company_id || ""}
+                  existingTaskIds={existingTaskIds}
+                  dates={dates}
+                  onTasksPulled={fetchData}
+                />
+                <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
+                  <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSmartFill}>
+                  <Sparkles className="mr-1 h-3.5 w-3.5" /> Smart Fill
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleAddCustomLine}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Add Line
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
+                  <Save className="mr-1 h-3.5 w-3.5" /> {saveStatus === "saving" ? "Saving..." : "Save"}
+                </Button>
+                <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+                  <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
+                </Button>
+              </div>
+              {/* Mobile: dropdown menu */}
+              <div className="md:hidden flex items-center gap-2">
+                <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+                  <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleSmartFill}>
+                      <Sparkles className="mr-2 h-4 w-4" /> Smart Fill
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePullFromLastWeek}>
+                      <Copy className="mr-2 h-4 w-4" /> Pull Last Week
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleAddCustomLine}>
+                      <Plus className="mr-2 h-4 w-4" /> Add Line
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
+                      <Save className="mr-2 h-4 w-4" /> Save Now
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={generatingPDF} onClick={async () => {
+                      setGeneratingPDF(true);
+                      try {
+                        await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                      } finally {
+                        setGeneratingPDF(false);
+                      }
+                    }}>
+                      <FileDown className="mr-2 h-4 w-4" /> Export PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </>
           )}
-          <Button variant="outline" size="sm" disabled={generatingPDF} onClick={async () => {
+          <Button variant="outline" size="sm" disabled={generatingPDF} className="hidden md:inline-flex" onClick={async () => {
               setGeneratingPDF(true);
               try {
                 await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
@@ -791,7 +831,7 @@ export default function LookAheadEditor() {
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10">
-                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> <span className="hidden md:inline">Delete</span>
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
