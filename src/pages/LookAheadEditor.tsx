@@ -34,6 +34,7 @@ import {
 type SaveStatus = "saved" | "saving" | "unsaved";
 
 export default function LookAheadEditor() {
+  const { id: projectId, lookaheadId } = useParams<{ id: string; lookaheadId: string }>();
   const isMobile = useIsMobile();
   const { user, profile, roles } = useAuth();
   const navigate = useNavigate();
