@@ -5,14 +5,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot } from "lucide-react";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, addDays, parseISO, subWeeks, isBefore, isAfter, formatDistanceToNow } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
+import { MobileTaskCard } from "@/components/lookahead/MobileTaskCard";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DndContext,
   closestCenter,
@@ -32,6 +35,7 @@ type SaveStatus = "saved" | "saving" | "unsaved";
 
 export default function LookAheadEditor() {
   const { id: projectId, lookaheadId } = useParams<{ id: string; lookaheadId: string }>();
+  const isMobile = useIsMobile();
   const { user, profile, roles } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -748,32 +752,72 @@ export default function LookAheadEditor() {
           )}
           {isOwner && (lookAhead?.status === "draft" || isRejected) && (
             <>
-              <PullTasksDialog
-                projectId={projectId!}
-                lookaheadId={lookaheadId!}
-                companyId={profile?.company_id || ""}
-                existingTaskIds={existingTaskIds}
-                dates={dates}
-                onTasksPulled={fetchData}
-              />
-              <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
-                <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleSmartFill}>
-                <Sparkles className="mr-1 h-3.5 w-3.5" /> Smart Fill
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleAddCustomLine}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Add Line
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
-                <Save className="mr-1 h-3.5 w-3.5" /> {saveStatus === "saving" ? "Saving..." : "Save"}
-              </Button>
-              <Button size="sm" onClick={handleSubmit} disabled={submitting}>
-                <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
-              </Button>
+              {/* Desktop: show all buttons */}
+              <div className="hidden md:flex items-center gap-2">
+                <PullTasksDialog
+                  projectId={projectId!}
+                  lookaheadId={lookaheadId!}
+                  companyId={profile?.company_id || ""}
+                  existingTaskIds={existingTaskIds}
+                  dates={dates}
+                  onTasksPulled={fetchData}
+                />
+                <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
+                  <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSmartFill}>
+                  <Sparkles className="mr-1 h-3.5 w-3.5" /> Smart Fill
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleAddCustomLine}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Add Line
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
+                  <Save className="mr-1 h-3.5 w-3.5" /> {saveStatus === "saving" ? "Saving..." : "Save"}
+                </Button>
+                <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+                  <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
+                </Button>
+              </div>
+              {/* Mobile: dropdown menu */}
+              <div className="md:hidden flex items-center gap-2">
+                <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+                  <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleSmartFill}>
+                      <Sparkles className="mr-2 h-4 w-4" /> Smart Fill
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePullFromLastWeek}>
+                      <Copy className="mr-2 h-4 w-4" /> Pull Last Week
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleAddCustomLine}>
+                      <Plus className="mr-2 h-4 w-4" /> Add Line
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
+                      <Save className="mr-2 h-4 w-4" /> Save Now
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={generatingPDF} onClick={async () => {
+                      setGeneratingPDF(true);
+                      try {
+                        await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                      } finally {
+                        setGeneratingPDF(false);
+                      }
+                    }}>
+                      <FileDown className="mr-2 h-4 w-4" /> Export PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </>
           )}
-          <Button variant="outline" size="sm" disabled={generatingPDF} onClick={async () => {
+          <Button variant="outline" size="sm" disabled={generatingPDF} className="hidden md:inline-flex" onClick={async () => {
               setGeneratingPDF(true);
               try {
                 await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
@@ -787,7 +831,7 @@ export default function LookAheadEditor() {
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10">
-                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> <span className="hidden md:inline">Delete</span>
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -850,8 +894,10 @@ export default function LookAheadEditor() {
 
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <StatusLegend />
-        <div className="relative w-64">
+        <div className="hidden md:block">
+          <StatusLegend />
+        </div>
+        <div className="relative w-full md:w-64">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Filter by task or trade..."
@@ -862,89 +908,113 @@ export default function LookAheadEditor() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-auto bg-card">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-muted/50 sticky top-0 z-20">
-              <tr>
-                <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
-                  Task
-                </th>
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
-                {dates.map((date) => {
-                  const d = parseISO(date);
-                  const isWeekend = [0, 6].includes(d.getDay());
-                  return (
-                    <th
-                      key={date}
-                      className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
-                        isWeekend ? "bg-muted/80" : ""
-                      }`}
-                    >
-                      <div>{format(d, "EEE")}</div>
-                      <div>{format(d, "M/d")}</div>
-                    </th>
-                  );
-                })}
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
-              </tr>
-              {/* Per-day PPC indicator row */}
-              {ppcStats.planned > 0 && (
-                <tr className="bg-muted/30">
-                  <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
-                    Daily PPC
+      {/* Mobile Card View */}
+      {isMobile ? (
+        <div className="space-y-3">
+          {filteredLines.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">
+              {filter ? "No matching tasks." : "No tasks yet. Use the menu to add tasks."}
+            </div>
+          ) : (
+            filteredLines.map((line) => (
+              <MobileTaskCard
+                key={line.id}
+                line={line}
+                dates={dates}
+                onStatusChange={handleStatusChange}
+                onFieldChange={handleFieldChange}
+                onDeleteLine={handleDeleteLine}
+                onNameChange={handleNameChange}
+                readOnly={isReadOnly}
+              />
+            ))
+          )}
+        </div>
+      ) : (
+        /* Desktop/Tablet Table View */
+        <div className="border rounded-lg overflow-auto bg-card">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-muted/50 sticky top-0 z-20">
+                <tr>
+                  <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
+                    Task
                   </th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
                   {dates.map((date) => {
-                    const day = ppcStats.perDay[date];
-                    let dotClass = "bg-muted-foreground/20"; // gray - no tasks
-                    if (day && day.total > 0) {
-                      const ratio = day.completed / day.total;
-                      if (ratio >= 1) dotClass = "bg-green-500";
-                      else if (ratio > 0) dotClass = "bg-yellow-500";
-                      else dotClass = "bg-red-500";
-                    }
+                    const d = parseISO(date);
+                    const isWeekend = [0, 6].includes(d.getDay());
                     return (
-                      <th key={date} className="py-0.5 px-0.5 text-center">
-                        <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                      <th
+                        key={date}
+                        className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
+                          isWeekend ? "bg-muted/80" : ""
+                        }`}
+                      >
+                        <div>{format(d, "EEE")}</div>
+                        <div>{format(d, "M/d")}</div>
                       </th>
                     );
                   })}
-                  <th colSpan={3}></th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
                 </tr>
-              )}
-            </thead>
-            <tbody>
-              {filteredLines.length === 0 ? (
-                <tr>
-                  <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
-                    {filter ? "No matching tasks." : "No tasks yet. Use 'Pull Tasks' to select tasks from a custom date range, or add a custom line."}
-                  </td>
-                </tr>
-              ) : (
-                <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-                  {filteredLines.map((line) => (
-                    <LookaheadRow
-                      key={line.id}
-                      line={line}
-                      dates={dates}
-                      onStatusChange={handleStatusChange}
-                      onFieldChange={handleFieldChange}
-                      onDeleteLine={handleDeleteLine}
-                      onNameChange={handleNameChange}
-                      readOnly={isReadOnly}
-                      onRegisterRef={handleRegisterRef}
-                      onNavigate={handleCellNavigate}
-                    />
-                  ))}
-                </SortableContext>
-              )}
-            </tbody>
-          </table>
-        </DndContext>
-      </div>
+                {/* Per-day PPC indicator row */}
+                {ppcStats.planned > 0 && (
+                  <tr className="bg-muted/30">
+                    <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
+                      Daily PPC
+                    </th>
+                    {dates.map((date) => {
+                      const day = ppcStats.perDay[date];
+                      let dotClass = "bg-muted-foreground/20";
+                      if (day && day.total > 0) {
+                        const ratio = day.completed / day.total;
+                        if (ratio >= 1) dotClass = "bg-green-500";
+                        else if (ratio > 0) dotClass = "bg-yellow-500";
+                        else dotClass = "bg-red-500";
+                      }
+                      return (
+                        <th key={date} className="py-0.5 px-0.5 text-center">
+                          <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                        </th>
+                      );
+                    })}
+                    <th colSpan={3}></th>
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {filteredLines.length === 0 ? (
+                  <tr>
+                    <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
+                      {filter ? "No matching tasks." : "No tasks yet. Use 'Pull Tasks' to select tasks from a custom date range, or add a custom line."}
+                    </td>
+                  </tr>
+                ) : (
+                  <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                    {filteredLines.map((line) => (
+                      <LookaheadRow
+                        key={line.id}
+                        line={line}
+                        dates={dates}
+                        onStatusChange={handleStatusChange}
+                        onFieldChange={handleFieldChange}
+                        onDeleteLine={handleDeleteLine}
+                        onNameChange={handleNameChange}
+                        readOnly={isReadOnly}
+                        onRegisterRef={handleRegisterRef}
+                        onNavigate={handleCellNavigate}
+                      />
+                    ))}
+                  </SortableContext>
+                )}
+              </tbody>
+            </table>
+          </DndContext>
+        </div>
+      )}
     </div>
   );
 }

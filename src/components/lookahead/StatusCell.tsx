@@ -92,7 +92,7 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
       onKeyDown={handleKeyDown}
       disabled={readOnly}
       className={cn(
-        "w-8 h-8 flex items-center justify-center rounded border text-xs font-bold transition-colors select-none",
+        "w-8 h-8 md:w-8 md:h-8 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center rounded border text-xs font-bold transition-colors select-none",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
         isWeekend && "bg-muted/50",
         !readOnly && "hover:bg-accent cursor-pointer",
