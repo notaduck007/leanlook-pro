@@ -925,6 +925,11 @@ export default function LookAheadEditor() {
         </div>
       )}
 
+      {/* Comparison Summary */}
+      {showComparison && comparisonData && (
+        <ComparisonSummaryBar data={comparisonData} />
+      )}
+
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="hidden md:block">
