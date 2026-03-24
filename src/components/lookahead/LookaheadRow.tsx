@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 export interface LookaheadLineData {
   id: string;
@@ -26,6 +28,7 @@ interface LookaheadRowProps {
   onStatusChange: (lineId: string, date: string, status: DayStatus) => void;
   onFieldChange: (lineId: string, field: string, value: string) => void;
   onDeleteLine?: (lineId: string) => void;
+  onNameChange?: (lineId: string, newName: string) => void;
   readOnly?: boolean;
 }
 
