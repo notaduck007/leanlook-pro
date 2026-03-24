@@ -126,6 +126,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     setExpandedIds(expanded);
 
     setTasks(topLevel);
+    setSearched(true);
     setLoading(false);
   };
 
