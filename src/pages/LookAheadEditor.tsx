@@ -841,6 +841,8 @@ export default function LookAheadEditor() {
                       onDeleteLine={handleDeleteLine}
                       onNameChange={handleNameChange}
                       readOnly={isReadOnly}
+                      onRegisterRef={handleRegisterRef}
+                      onNavigate={handleCellNavigate}
                     />
                   ))}
                 </SortableContext>
