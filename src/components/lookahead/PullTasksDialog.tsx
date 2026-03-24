@@ -335,6 +335,12 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           </p>
         )}
 
+        {searched && tasks.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground text-sm border rounded-md mt-2">
+            No tasks found in the selected date range. Your schedule data may use different dates.
+          </div>
+        )}
+
         {tasks.length > 0 && (
           <div className="flex-1 overflow-auto border rounded-md mt-2">
             <div className="flex items-center justify-between p-2 border-b bg-muted/30">
