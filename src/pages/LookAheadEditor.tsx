@@ -838,10 +838,22 @@ export default function LookAheadEditor() {
               </div>
             </>
           )}
+          {canReview && (
+            <Button
+              variant={showComparison ? "default" : "outline"}
+              size="sm"
+              onClick={handleToggleComparison}
+              disabled={loadingComparison}
+              className="hidden md:inline-flex"
+            >
+              {loadingComparison ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <GitCompareArrows className="mr-1 h-3.5 w-3.5" />}
+              {showComparison ? "Hide Compare" : "Compare"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" disabled={generatingPDF} className="hidden md:inline-flex" onClick={async () => {
               setGeneratingPDF(true);
               try {
-                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, showComparison ? comparisonData : null);
               } finally {
                 setGeneratingPDF(false);
               }
