@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, addDays, subDays, parseISO, isBefore, isAfter } from "date-fns";
-import { CalendarIcon, Download } from "lucide-react";
+import { CalendarIcon, Download, ChevronRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -24,7 +24,9 @@ interface TaskPreview {
   start_date: string | null;
   finish_date: string | null;
   tags: string[];
+  parent_id: string | null;
   selected: boolean;
+  children: TaskPreview[];
 }
 
 export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTaskIds, dates, onTasksPulled }: PullTasksDialogProps) {
@@ -35,6 +37,15 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   const [tasks, setTasks] = useState<TaskPreview[]>([]);
   const [loading, setLoading] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const handleSearch = async () => {
     if (!startDate || !endDate) return;
@@ -57,27 +68,78 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
       .select("*")
       .eq("schedule_version_id", versions[0].id);
 
-    const filtered = (allTasks || []).filter((t) => {
-      if (!t.start_date && !t.finish_date) return false;
+    const all = allTasks || [];
+
+    // Filter tasks that overlap the date range
+    const overlapping = new Set<string>();
+    all.forEach((t) => {
+      if (!t.start_date && !t.finish_date) return;
       const ts = t.start_date ? parseISO(t.start_date) : null;
       const te = t.finish_date ? parseISO(t.finish_date) : ts;
-      if (!ts && !te) return false;
-      return (!ts || !isAfter(ts, searchEnd)) && (!te || !isBefore(te, searchStart));
+      if (!ts && !te) return;
+      if ((!ts || !isAfter(ts, searchEnd)) && (!te || !isBefore(te, searchStart))) {
+        overlapping.add(t.id);
+      }
     });
 
-    setTasks(filtered.map((t) => ({
-      id: t.id,
-      name: t.name,
-      start_date: t.start_date,
-      finish_date: t.finish_date,
-      tags: (t.tags as string[]) || [],
-      selected: !existingTaskIds.has(t.id),
-    })));
+    // Also include parents of overlapping tasks, and children of overlapping parents
+    const parentIds = new Set<string>();
+    all.forEach((t) => {
+      if (overlapping.has(t.id) && t.parent_id) parentIds.add(t.parent_id);
+    });
+    // Include children whose parent is in the overlapping set
+    all.forEach((t) => {
+      if (t.parent_id && overlapping.has(t.parent_id)) overlapping.add(t.id);
+    });
+
+    // Build hierarchy: top-level = no parent or parent not in result set
+    const taskMap = new Map<string, TaskPreview>();
+    const resultIds = new Set([...overlapping, ...parentIds]);
+
+    all.filter((t) => resultIds.has(t.id)).forEach((t) => {
+      taskMap.set(t.id, {
+        id: t.id,
+        name: t.name,
+        start_date: t.start_date,
+        finish_date: t.finish_date,
+        tags: (t.tags as string[]) || [],
+        parent_id: t.parent_id,
+        selected: !existingTaskIds.has(t.id),
+        children: [],
+      });
+    });
+
+    // Nest children under parents
+    const topLevel: TaskPreview[] = [];
+    taskMap.forEach((t) => {
+      if (t.parent_id && taskMap.has(t.parent_id)) {
+        taskMap.get(t.parent_id)!.children.push(t);
+      } else {
+        topLevel.push(t);
+      }
+    });
+
+    // Auto-expand parents with children
+    const expanded = new Set<string>();
+    topLevel.forEach((t) => { if (t.children.length > 0) expanded.add(t.id); });
+    setExpandedIds(expanded);
+
+    setTasks(topLevel);
     setLoading(false);
   };
 
+  const getAllFlat = (items: TaskPreview[]): TaskPreview[] => {
+    const result: TaskPreview[] = [];
+    items.forEach((t) => {
+      result.push(t);
+      result.push(...t.children);
+    });
+    return result;
+  };
+
   const handlePull = async () => {
-    const selected = tasks.filter((t) => t.selected && !existingTaskIds.has(t.id));
+    const allFlat = getAllFlat(tasks);
+    const selected = allFlat.filter((t) => t.selected && !existingTaskIds.has(t.id));
     if (!selected.length) return;
     setPulling(true);
 
@@ -102,7 +164,6 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         }
       }
 
-      // Build status_per_day for dates within the task's range
       const statusPerDay: Record<string, string> = {};
       if (t.start_date && t.finish_date) {
         for (const d of dates) {
@@ -133,11 +194,84 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     onTasksPulled();
   };
 
-  const toggleAll = (checked: boolean) => {
-    setTasks((prev) => prev.map((t) => ({ ...t, selected: existingTaskIds.has(t.id) ? false : checked })));
+  const toggleTask = (id: string, checked: boolean) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          // Toggle parent + all children together
+          const newChildren = t.children.map((c) => ({
+            ...c,
+            selected: existingTaskIds.has(c.id) ? false : checked,
+          }));
+          return { ...t, selected: existingTaskIds.has(t.id) ? false : checked, children: newChildren };
+        }
+        // Check if it's a child
+        const newChildren = t.children.map((c) =>
+          c.id === id ? { ...c, selected: existingTaskIds.has(c.id) ? false : checked } : c
+        );
+        return { ...t, children: newChildren };
+      })
+    );
   };
 
-  const selectedCount = tasks.filter((t) => t.selected && !existingTaskIds.has(t.id)).length;
+  const toggleAll = (checked: boolean) => {
+    setTasks((prev) =>
+      prev.map((t) => ({
+        ...t,
+        selected: existingTaskIds.has(t.id) ? false : checked,
+        children: t.children.map((c) => ({
+          ...c,
+          selected: existingTaskIds.has(c.id) ? false : checked,
+        })),
+      }))
+    );
+  };
+
+  const allFlat = getAllFlat(tasks);
+  const selectable = allFlat.filter((t) => !existingTaskIds.has(t.id));
+  const selectedCount = allFlat.filter((t) => t.selected && !existingTaskIds.has(t.id)).length;
+
+  const renderTask = (t: TaskPreview, depth: number = 0) => {
+    const alreadyExists = existingTaskIds.has(t.id);
+    const hasChildren = t.children.length > 0;
+    const isExpanded = expandedIds.has(t.id);
+
+    return (
+      <div key={t.id}>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-2 py-1.5 border-b last:border-0 text-sm",
+            alreadyExists && "opacity-50"
+          )}
+          style={{ paddingLeft: `${8 + depth * 20}px` }}
+        >
+          {hasChildren ? (
+            <button onClick={() => toggleExpand(t.id)} className="p-0.5 hover:bg-muted rounded">
+              {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+          ) : (
+            <span className="w-5" />
+          )}
+          <Checkbox
+            checked={t.selected}
+            disabled={alreadyExists}
+            onCheckedChange={(c) => toggleTask(t.id, !!c)}
+          />
+          <div className="flex-1 min-w-0">
+            <span className={cn("truncate block", hasChildren && "font-medium")}>{t.name}</span>
+            {t.start_date && (
+              <span className="text-xs text-muted-foreground">
+                {format(parseISO(t.start_date), "MMM d")} — {t.finish_date ? format(parseISO(t.finish_date), "MMM d") : "?"}
+              </span>
+            )}
+          </div>
+          {alreadyExists && <span className="text-xs text-muted-foreground italic">Already added</span>}
+          {hasChildren && <span className="text-xs text-muted-foreground">{t.children.length} subtasks</span>}
+        </div>
+        {hasChildren && isExpanded && t.children.map((c) => renderTask(c, depth + 1))}
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -149,11 +283,10 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Pull Tasks from Schedule</DialogTitle>
-          <DialogDescription>Select a date range to find overlapping tasks from the master schedule.</DialogDescription>
+          <DialogDescription>Select a date range to find overlapping tasks and subtasks from the master schedule.</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-end gap-3 flex-wrap">
-          {/* Start Date */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Start Date</label>
             <Popover>
@@ -169,7 +302,6 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
             </Popover>
           </div>
 
-          {/* End Date */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">End Date</label>
             <Popover>
@@ -185,7 +317,6 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
             </Popover>
           </div>
 
-          {/* Buffer toggle */}
           <div className="flex items-center gap-2 pb-1">
             <Checkbox id="buffer" checked={includeBuffer} onCheckedChange={(c) => setIncludeBuffer(!!c)} />
             <label htmlFor="buffer" className="text-xs">±2 weeks buffer</label>
@@ -202,38 +333,20 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           </p>
         )}
 
-        {/* Task list */}
         {tasks.length > 0 && (
           <div className="flex-1 overflow-auto border rounded-md mt-2">
             <div className="flex items-center justify-between p-2 border-b bg-muted/30">
               <div className="flex items-center gap-2">
-                <Checkbox checked={selectedCount === tasks.filter((t) => !existingTaskIds.has(t.id)).length && selectedCount > 0} onCheckedChange={(c) => toggleAll(!!c)} />
+                <Checkbox
+                  checked={selectedCount === selectable.length && selectedCount > 0}
+                  onCheckedChange={(c) => toggleAll(!!c)}
+                />
                 <span className="text-xs font-medium">{selectedCount} selected</span>
               </div>
-              <span className="text-xs text-muted-foreground">{tasks.length} tasks found</span>
+              <span className="text-xs text-muted-foreground">{allFlat.length} tasks found</span>
             </div>
             <div className="max-h-[300px] overflow-auto">
-              {tasks.map((t) => {
-                const alreadyExists = existingTaskIds.has(t.id);
-                return (
-                  <div key={t.id} className={cn("flex items-center gap-2 px-2 py-1.5 border-b last:border-0 text-sm", alreadyExists && "opacity-50")}>
-                    <Checkbox
-                      checked={t.selected}
-                      disabled={alreadyExists}
-                      onCheckedChange={(c) => setTasks((prev) => prev.map((tt) => tt.id === t.id ? { ...tt, selected: !!c } : tt))}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="truncate block">{t.name}</span>
-                      {t.start_date && (
-                        <span className="text-xs text-muted-foreground">
-                          {format(parseISO(t.start_date), "MMM d")} — {t.finish_date ? format(parseISO(t.finish_date), "MMM d") : "?"}
-                        </span>
-                      )}
-                    </div>
-                    {alreadyExists && <span className="text-xs text-muted-foreground italic">Already added</span>}
-                  </div>
-                );
-              })}
+              {tasks.map((t) => renderTask(t))}
             </div>
           </div>
         )}
