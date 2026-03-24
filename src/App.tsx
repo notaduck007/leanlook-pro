@@ -17,6 +17,7 @@ import NewLookAhead from "./pages/NewLookAhead";
 import LookAheadEditor from "./pages/LookAheadEditor";
 import Analytics from "./pages/Analytics";
 import LookAheads from "./pages/LookAheads";
+import MasterTasks from "./pages/MasterTasks";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
