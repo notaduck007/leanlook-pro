@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 export interface LookaheadLineData {
   id: string;
@@ -26,28 +28,80 @@ interface LookaheadRowProps {
   onStatusChange: (lineId: string, date: string, status: DayStatus) => void;
   onFieldChange: (lineId: string, field: string, value: string) => void;
   onDeleteLine?: (lineId: string) => void;
+  onNameChange?: (lineId: string, newName: string) => void;
   readOnly?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, readOnly }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");
   const depth = line.depth || 0;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: line.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleNameSave = () => {
+    setEditingName(false);
+    if (nameValue !== (line.task_name || line.custom_text || "") && onNameChange) {
+      onNameChange(line.id, nameValue);
+    }
+  };
 
   return (
     <>
-      <tr className={cn(
-        "border-b border-border hover:bg-muted/30 transition-colors",
-        line.is_parent && "bg-muted/20 font-medium"
-      )}>
+      <tr
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "border-b border-border hover:bg-muted/30 transition-colors",
+          line.is_parent && "bg-muted/20 font-medium",
+          isDragging && "bg-accent/40"
+        )}
+      >
         {/* Task Name */}
         <td className="py-1.5 px-2 sticky left-0 bg-card z-10 min-w-[200px] max-w-[280px]">
           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
+            {!readOnly && (
+              <button {...attributes} {...listeners} className="p-0.5 cursor-grab hover:bg-accent rounded touch-none">
+                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            )}
             {line.is_parent && (
               <button onClick={() => setCollapsed(!collapsed)} className="p-0.5 hover:bg-accent rounded">
                 {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
             )}
-            <span className="text-sm truncate">{line.task_name || line.custom_text || "—"}</span>
+            {editingName && !readOnly ? (
+              <input
+                className="flex-1 text-sm bg-transparent border-0 border-b border-ring outline-none px-1 py-0.5"
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onBlur={handleNameSave}
+                onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
+                autoFocus
+              />
+            ) : (
+              <span
+                className={cn("text-sm truncate", !readOnly && "cursor-pointer hover:underline")}
+                onDoubleClick={() => { if (!readOnly) { setNameValue(line.task_name || line.custom_text || ""); setEditingName(true); } }}
+                title="Double-click to edit"
+              >
+                {line.task_name || line.custom_text || "—"}
+              </span>
+            )}
           </div>
         </td>
 
@@ -144,6 +198,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onStatusChange={onStatusChange}
           onFieldChange={onFieldChange}
           onDeleteLine={onDeleteLine}
+          onNameChange={onNameChange}
           readOnly={readOnly}
         />
       ))}
