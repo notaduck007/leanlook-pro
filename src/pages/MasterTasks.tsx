@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Database, ChevronDown, ChevronRight, Pencil, Check, X } from "lucide-react";
+import { Loader2, Search, Database, ChevronDown, ChevronRight, Check, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface MasterSubtask {
