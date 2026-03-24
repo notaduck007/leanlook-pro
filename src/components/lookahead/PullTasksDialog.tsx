@@ -37,6 +37,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   const [tasks, setTasks] = useState<TaskPreview[]>([]);
   const [loading, setLoading] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleExpand = (id: string) => {
