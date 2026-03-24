@@ -747,9 +747,16 @@ export default function LookAheadEditor() {
               </Button>
             </>
           )}
-          <Button variant="outline" size="sm" onClick={() => generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates)}>
-            <FileDown className="mr-1 h-3.5 w-3.5" /> Export PDF
-          </Button>
+          <Button variant="outline" size="sm" disabled={generatingPDF} onClick={async () => {
+              setGeneratingPDF(true);
+              try {
+                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+              } finally {
+                setGeneratingPDF(false);
+              }
+            }}>
+              <FileDown className="mr-1 h-3.5 w-3.5" /> {generatingPDF ? "Generating..." : "Export PDF"}
+            </Button>
           {isOwner && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
