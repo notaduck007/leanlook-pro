@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Database, ChevronDown, ChevronRight, Pencil, Check, X } from "lucide-react";
+import { Loader2, Search, Database, ChevronDown, ChevronRight, Check, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface MasterSubtask {
@@ -94,6 +94,19 @@ export default function MasterTasks() {
       toast({ title: "Subtask name updated" });
     }
     setEditingSubtaskId(null);
+  };
+
+  const deleteSubtask = async (subtaskId: string, masterTaskId: string) => {
+    const { error } = await supabase.from("master_subtasks").delete().eq("id", subtaskId);
+    if (error) {
+      toast({ title: "Failed to delete subtask", variant: "destructive" });
+    } else {
+      setSubtaskCache(prev => ({
+        ...prev,
+        [masterTaskId]: (prev[masterTaskId] || []).filter(st => st.id !== subtaskId),
+      }));
+      toast({ title: "Subtask deleted" });
+    }
   };
 
   const filtered = tasks.filter(t =>
@@ -203,7 +216,7 @@ export default function MasterTasks() {
                       <p className="text-xs text-muted-foreground italic">Loading subtasks...</p>
                     ) : (
                       (subtaskCache[task.id] || []).map((st, idx) => (
-                        <div key={st.id} className="flex items-center gap-2 py-1">
+                        <div key={st.id} className="group/subtask flex items-center gap-2 py-1">
                           <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
                           {editingSubtaskId === st.id ? (
                             <div className="flex items-center gap-1 flex-1">
@@ -233,10 +246,21 @@ export default function MasterTasks() {
                               {st.name}
                             </span>
                           )}
-                          {st.category && editingSubtaskId !== st.id && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
-                              {st.category}
-                            </span>
+                          {editingSubtaskId !== st.id && (
+                            <div className="flex items-center gap-1">
+                              {st.category && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
+                                  {st.category}
+                                </span>
+                              )}
+                              <button
+                                onClick={() => deleteSubtask(st.id, task.id)}
+                                className="p-0.5 text-muted-foreground hover:text-destructive rounded hover:bg-destructive/10 transition-colors opacity-0 group-hover/subtask:opacity-100"
+                                title="Delete subtask"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))
