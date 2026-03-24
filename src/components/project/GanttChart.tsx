@@ -58,72 +58,72 @@ export function GanttChart({ tasks }: GanttChartProps) {
   }
 
   return (
-    <ScrollArea className="w-full">
-      <div className="flex">
-        {/* Task names column */}
-        <div className="shrink-0 w-[200px] border-r bg-card z-10">
-          <div className="h-10 border-b flex items-center px-3 text-xs font-medium text-muted-foreground bg-muted/50">
-            Task
-          </div>
-          {validTasks.slice(0, 30).map((task) => (
-            <div
-              key={task.id}
-              className="flex items-center px-3 border-b text-xs truncate"
-              style={{ height: rowHeight }}
-            >
-              {task.name}
+    <div className="w-full overflow-hidden">
+      <ScrollArea className="w-full">
+        <div className="flex" style={{ width: 200 + chartWidth }}>
+          {/* Task names column */}
+          <div className="shrink-0 w-[200px] border-r bg-card z-10">
+            <div className="h-10 border-b flex items-center px-3 text-xs font-medium text-muted-foreground bg-muted/50">
+              Task
             </div>
-          ))}
-        </div>
-
-        {/* Chart area */}
-        <div style={{ width: chartWidth, minWidth: chartWidth }}>
-          {/* Month headers */}
-          <div className="flex h-10 border-b bg-muted/50">
-            {months.map((m) => (
+            {validTasks.slice(0, 30).map((task) => (
               <div
-                key={m.label}
-                className="border-r flex items-center justify-center text-[10px] font-medium text-muted-foreground"
-                style={{ width: m.span * dayWidth }}
+                key={task.id}
+                className="flex items-center px-3 border-b text-xs truncate"
+                style={{ height: rowHeight }}
               >
-                {m.label}
+                {task.name}
               </div>
             ))}
           </div>
 
-          {/* Bars */}
-          {validTasks.slice(0, 30).map((task) => {
-            const startOffset = differenceInDays(parseISO(task.start_date!), minDate);
-            const duration = differenceInDays(parseISO(task.finish_date!), parseISO(task.start_date!)) + 1;
-            const pct = task.percent_complete || 0;
-
-            return (
-              <div
-                key={task.id}
-                className="relative border-b"
-                style={{ height: rowHeight }}
-              >
-                {/* Background bar */}
+          {/* Chart area */}
+          <div style={{ width: chartWidth, minWidth: chartWidth }}>
+            {/* Month headers */}
+            <div className="flex h-10 border-b bg-muted/50">
+              {months.map((m) => (
                 <div
-                  className="absolute top-1.5 rounded-sm bg-primary/20"
-                  style={{
-                    left: startOffset * dayWidth,
-                    width: duration * dayWidth - 2,
-                    height: rowHeight - 12,
-                  }}
+                  key={m.label}
+                  className="border-r flex items-center justify-center text-[10px] font-medium text-muted-foreground"
+                  style={{ width: m.span * dayWidth }}
                 >
-                  {/* Progress fill */}
-                  <div
-                    className="h-full rounded-sm bg-primary/60"
-                    style={{ width: `${pct}%` }}
-                  />
+                  {m.label}
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+
+            {/* Bars */}
+            {validTasks.slice(0, 30).map((task) => {
+              const startOffset = differenceInDays(parseISO(task.start_date!), minDate);
+              const duration = differenceInDays(parseISO(task.finish_date!), parseISO(task.start_date!)) + 1;
+              const pct = task.percent_complete || 0;
+
+              return (
+                <div
+                  key={task.id}
+                  className="relative border-b"
+                  style={{ height: rowHeight }}
+                >
+                  <div
+                    className="absolute top-1.5 rounded-sm bg-primary/20"
+                    style={{
+                      left: startOffset * dayWidth,
+                      width: duration * dayWidth - 2,
+                      height: rowHeight - 12,
+                    }}
+                  >
+                    <div
+                      className="h-full rounded-sm bg-primary/60"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </div>
   );
 }

@@ -5,8 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock } from "lucide-react";
+import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { GanttChart } from "@/components/project/GanttChart";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -224,11 +225,46 @@ export default function ProjectDetail() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-2">
                     <Badge variant={statusColor(la.status) as any} className="capitalize text-xs">
                       {la.status}
                     </Badge>
                     <Eye className="h-4 w-4 text-muted-foreground" />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Look-Ahead?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete this look-ahead and all its task lines. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await supabase.from("lookahead_lines").delete().eq("lookahead_id", la.id);
+                              await supabase.from("look_aheads").delete().eq("id", la.id);
+                              toast({ title: "Look-ahead deleted" });
+                              fetchData();
+                            }}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               ))}
