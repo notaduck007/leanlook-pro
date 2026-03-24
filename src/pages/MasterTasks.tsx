@@ -96,6 +96,19 @@ export default function MasterTasks() {
     setEditingSubtaskId(null);
   };
 
+  const deleteSubtask = async (subtaskId: string, masterTaskId: string) => {
+    const { error } = await supabase.from("master_subtasks").delete().eq("id", subtaskId);
+    if (error) {
+      toast({ title: "Failed to delete subtask", variant: "destructive" });
+    } else {
+      setSubtaskCache(prev => ({
+        ...prev,
+        [masterTaskId]: (prev[masterTaskId] || []).filter(st => st.id !== subtaskId),
+      }));
+      toast({ title: "Subtask deleted" });
+    }
+  };
+
   const filtered = tasks.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     (t.tags || []).some(tag => tag.toLowerCase().includes(search.toLowerCase()))
