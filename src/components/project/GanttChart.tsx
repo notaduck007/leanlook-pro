@@ -58,8 +58,8 @@ export function GanttChart({ tasks }: GanttChartProps) {
   }
 
   return (
-    <div className="w-full overflow-x-auto border rounded-md">
-      <div style={{ minWidth: 200 + chartWidth }}>
+    <div className="w-full max-w-full overflow-x-auto">
+      <div style={{ width: 200 + chartWidth }}>
         <div className="flex">
           {/* Task names column */}
           <div className="shrink-0 w-[200px] border-r bg-card sticky left-0 z-10">
