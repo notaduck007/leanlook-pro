@@ -51,6 +51,41 @@ export default function LookAheadEditor() {
   const linesRef = useRef<LookaheadLineData[]>([]);
   const isSavingRef = useRef(false);
 
+  // Cell refs for keyboard navigation
+  const cellRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  const handleRegisterRef = useCallback((key: string, el: HTMLButtonElement | null) => {
+    if (el) {
+      cellRefsMap.current.set(key, el);
+    } else {
+      cellRefsMap.current.delete(key);
+    }
+  }, []);
+
+  const handleCellNavigate = useCallback((cellKey: string, direction: "up" | "down" | "left" | "right") => {
+    // cellKey format: `${lineId}-${date}`
+    const parts = cellKey.split("-");
+    const date = parts.slice(-3).join("-"); // yyyy-MM-dd
+    const lineId = parts.slice(0, -3).join("-"); // uuid may contain dashes
+
+    const lineIds = filteredLinesRef.current.map((l) => l.id);
+    const lineIdx = lineIds.indexOf(lineId);
+    const dateIdx = datesRef.current.indexOf(date);
+    if (lineIdx === -1 || dateIdx === -1) return;
+
+    let newLineIdx = lineIdx;
+    let newDateIdx = dateIdx;
+
+    if (direction === "up") newLineIdx = Math.max(0, lineIdx - 1);
+    else if (direction === "down") newLineIdx = Math.min(lineIds.length - 1, lineIdx + 1);
+    else if (direction === "left") newDateIdx = Math.max(0, dateIdx - 1);
+    else if (direction === "right") newDateIdx = Math.min(datesRef.current.length - 1, dateIdx + 1);
+
+    const targetKey = `${lineIds[newLineIdx]}-${datesRef.current[newDateIdx]}`;
+    const targetEl = cellRefsMap.current.get(targetKey);
+    if (targetEl) targetEl.focus();
+  }, []);
+
   const isAdmin = roles.includes("admin");
   const isPM = roles.includes("pm");
   const canReview = isAdmin || isPM;
