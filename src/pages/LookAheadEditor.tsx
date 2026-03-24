@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical } from "lucide-react";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical, GitCompareArrows } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, addDays, parseISO, subWeeks, isBefore, isAfter, formatDistanceToNow } from "date-fns";
@@ -16,6 +16,7 @@ import { DayStatus } from "@/components/lookahead/StatusCell";
 import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { fetchComparisonData, ComparisonData, ComparisonSummaryBar, ComparisonIndicator, RemovedTasksSection } from "@/components/lookahead/WeekComparison";
 import {
   DndContext,
   closestCenter,
@@ -47,6 +48,9 @@ export default function LookAheadEditor() {
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState("");
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [loadingComparison, setLoadingComparison] = useState(false);
 
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
@@ -643,6 +647,23 @@ export default function LookAheadEditor() {
     }
   };
 
+  const handleToggleComparison = useCallback(async () => {
+    if (showComparison) {
+      setShowComparison(false);
+      setComparisonData(null);
+      return;
+    }
+    if (!projectId || !lookAhead?.week_start_date) return;
+    setLoadingComparison(true);
+    const data = await fetchComparisonData(projectId, lookAhead.week_start_date, lines);
+    setComparisonData(data);
+    setShowComparison(true);
+    setLoadingComparison(false);
+    if (!data) {
+      toast({ title: "No previous look-ahead found for comparison", variant: "destructive" });
+    }
+  }, [showComparison, projectId, lookAhead?.week_start_date, lines, toast]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -805,7 +826,7 @@ export default function LookAheadEditor() {
                     <DropdownMenuItem disabled={generatingPDF} onClick={async () => {
                       setGeneratingPDF(true);
                       try {
-                        await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                        await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, showComparison ? comparisonData : null);
                       } finally {
                         setGeneratingPDF(false);
                       }
@@ -817,10 +838,22 @@ export default function LookAheadEditor() {
               </div>
             </>
           )}
+          {canReview && (
+            <Button
+              variant={showComparison ? "default" : "outline"}
+              size="sm"
+              onClick={handleToggleComparison}
+              disabled={loadingComparison}
+              className="hidden md:inline-flex"
+            >
+              {loadingComparison ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <GitCompareArrows className="mr-1 h-3.5 w-3.5" />}
+              {showComparison ? "Hide Compare" : "Compare"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" disabled={generatingPDF} className="hidden md:inline-flex" onClick={async () => {
               setGeneratingPDF(true);
               try {
-                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, showComparison ? comparisonData : null);
               } finally {
                 setGeneratingPDF(false);
               }
@@ -890,6 +923,11 @@ export default function LookAheadEditor() {
             />
           </div>
         </div>
+      )}
+
+      {/* Comparison Summary */}
+      {showComparison && comparisonData && (
+        <ComparisonSummaryBar data={comparisonData} />
       )}
 
       {/* Filter + Legend */}
@@ -1006,6 +1044,7 @@ export default function LookAheadEditor() {
                         readOnly={isReadOnly}
                         onRegisterRef={handleRegisterRef}
                         onNavigate={handleCellNavigate}
+                        comparisonData={showComparison ? comparisonData : undefined}
                       />
                     ))}
                   </SortableContext>
@@ -1014,6 +1053,11 @@ export default function LookAheadEditor() {
             </table>
           </DndContext>
         </div>
+      )}
+
+      {/* Removed tasks section (comparison mode) */}
+      {showComparison && comparisonData && (
+        <RemovedTasksSection removedLines={comparisonData.removedLines} />
       )}
     </div>
   );

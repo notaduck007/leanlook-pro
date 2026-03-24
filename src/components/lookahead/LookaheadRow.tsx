@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
 
 export interface LookaheadLineData {
   id: string;
@@ -32,9 +33,10 @@ interface LookaheadRowProps {
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
+  comparisonData?: ComparisonData | null;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly, onRegisterRef, onNavigate }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly, onRegisterRef, onNavigate, comparisonData }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");
@@ -62,6 +64,11 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     }
   };
 
+  const isNewTask = comparisonData && (() => {
+    const key = line.task_id || line.custom_text || "";
+    return key ? comparisonData.newLineKeys.has(key) : false;
+  })();
+
   return (
     <>
       <tr
@@ -70,7 +77,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         className={cn(
           "border-b border-border hover:bg-muted/30 transition-colors",
           line.is_parent && "bg-muted/20 font-medium",
-          isDragging && "bg-accent/40"
+          isDragging && "bg-accent/40",
+          isNewTask && "border-l-2 border-l-blue-500"
         )}
       >
         {/* Task Name */}
@@ -103,6 +111,9 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               >
                 {line.task_name || line.custom_text || "—"}
               </span>
+            )}
+            {comparisonData && (
+              <ComparisonIndicator lineTaskId={line.task_id} lineCustomText={line.custom_text} comparisonData={comparisonData} />
             )}
           </div>
         </td>
@@ -208,6 +219,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
+          comparisonData={comparisonData}
         />
       ))}
     </>
