@@ -665,6 +665,32 @@ export default function LookAheadEditor() {
   filteredLinesRef.current = filteredLines;
   datesRef.current = dates;
 
+  // PPC calculation
+  const ppcStats = (() => {
+    let completed = 0;
+    let planned = 0;
+    const perDay: Record<string, { completed: number; total: number }> = {};
+
+    dates.forEach((d) => { perDay[d] = { completed: 0, total: 0 }; });
+
+    lines.forEach((l) => {
+      dates.forEach((d) => {
+        const s = l.status_per_day[d] as DayStatus;
+        if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
+          planned++;
+          perDay[d].total++;
+          if (s === "Y") {
+            completed++;
+            perDay[d].completed++;
+          }
+        }
+      });
+    });
+
+    const ppc = planned > 0 ? Math.round((completed / planned) * 100) : null;
+    return { completed, planned, ppc, perDay };
+  })();
+
   const renderSaveStatus = () => {
     if (saveStatus === "saving") {
       return (
@@ -791,6 +817,37 @@ export default function LookAheadEditor() {
         </div>
       </div>
 
+      {/* PPC Bar */}
+      {ppcStats.planned > 0 && (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-semibold">
+              PPC:{" "}
+              <span className={
+                ppcStats.ppc! >= 80 ? "text-green-600 dark:text-green-400" :
+                ppcStats.ppc! >= 60 ? "text-yellow-600 dark:text-yellow-400" :
+                "text-red-600 dark:text-red-400"
+              }>
+                {ppcStats.ppc}%
+              </span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {ppcStats.completed} of {ppcStats.planned} planned tasks completed
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                ppcStats.ppc! >= 80 ? "bg-green-500" :
+                ppcStats.ppc! >= 60 ? "bg-yellow-500" :
+                "bg-red-500"
+              }`}
+              style={{ width: `${ppcStats.ppc}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <StatusLegend />
@@ -834,6 +891,30 @@ export default function LookAheadEditor() {
                 <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
                 <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
               </tr>
+              {/* Per-day PPC indicator row */}
+              {ppcStats.planned > 0 && (
+                <tr className="bg-muted/30">
+                  <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
+                    Daily PPC
+                  </th>
+                  {dates.map((date) => {
+                    const day = ppcStats.perDay[date];
+                    let dotClass = "bg-muted-foreground/20"; // gray - no tasks
+                    if (day && day.total > 0) {
+                      const ratio = day.completed / day.total;
+                      if (ratio >= 1) dotClass = "bg-green-500";
+                      else if (ratio > 0) dotClass = "bg-yellow-500";
+                      else dotClass = "bg-red-500";
+                    }
+                    return (
+                      <th key={date} className="py-0.5 px-0.5 text-center">
+                        <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                      </th>
+                    );
+                  })}
+                  <th colSpan={3}></th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {filteredLines.length === 0 ? (
