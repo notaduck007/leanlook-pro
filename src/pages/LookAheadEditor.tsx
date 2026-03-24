@@ -891,6 +891,30 @@ export default function LookAheadEditor() {
                 <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
                 <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
               </tr>
+              {/* Per-day PPC indicator row */}
+              {ppcStats.planned > 0 && (
+                <tr className="bg-muted/30">
+                  <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
+                    Daily PPC
+                  </th>
+                  {dates.map((date) => {
+                    const day = ppcStats.perDay[date];
+                    let dotClass = "bg-muted-foreground/20"; // gray - no tasks
+                    if (day && day.total > 0) {
+                      const ratio = day.completed / day.total;
+                      if (ratio >= 1) dotClass = "bg-green-500";
+                      else if (ratio > 0) dotClass = "bg-yellow-500";
+                      else dotClass = "bg-red-500";
+                    }
+                    return (
+                      <th key={date} className="py-0.5 px-0.5 text-center">
+                        <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                      </th>
+                    );
+                  })}
+                  <th colSpan={3}></th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {filteredLines.length === 0 ? (
