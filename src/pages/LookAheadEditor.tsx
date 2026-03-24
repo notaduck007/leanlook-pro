@@ -894,8 +894,10 @@ export default function LookAheadEditor() {
 
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <StatusLegend />
-        <div className="relative w-64">
+        <div className="hidden md:block">
+          <StatusLegend />
+        </div>
+        <div className="relative w-full md:w-64">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Filter by task or trade..."
@@ -906,89 +908,113 @@ export default function LookAheadEditor() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-auto bg-card">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-muted/50 sticky top-0 z-20">
-              <tr>
-                <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
-                  Task
-                </th>
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
-                {dates.map((date) => {
-                  const d = parseISO(date);
-                  const isWeekend = [0, 6].includes(d.getDay());
-                  return (
-                    <th
-                      key={date}
-                      className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
-                        isWeekend ? "bg-muted/80" : ""
-                      }`}
-                    >
-                      <div>{format(d, "EEE")}</div>
-                      <div>{format(d, "M/d")}</div>
-                    </th>
-                  );
-                })}
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
-                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
-              </tr>
-              {/* Per-day PPC indicator row */}
-              {ppcStats.planned > 0 && (
-                <tr className="bg-muted/30">
-                  <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
-                    Daily PPC
+      {/* Mobile Card View */}
+      {isMobile ? (
+        <div className="space-y-3">
+          {filteredLines.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">
+              {filter ? "No matching tasks." : "No tasks yet. Use the menu to add tasks."}
+            </div>
+          ) : (
+            filteredLines.map((line) => (
+              <MobileTaskCard
+                key={line.id}
+                line={line}
+                dates={dates}
+                onStatusChange={handleStatusChange}
+                onFieldChange={handleFieldChange}
+                onDeleteLine={handleDeleteLine}
+                onNameChange={handleNameChange}
+                readOnly={isReadOnly}
+              />
+            ))
+          )}
+        </div>
+      ) : (
+        /* Desktop/Tablet Table View */
+        <div className="border rounded-lg overflow-auto bg-card">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-muted/50 sticky top-0 z-20">
+                <tr>
+                  <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
+                    Task
                   </th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
                   {dates.map((date) => {
-                    const day = ppcStats.perDay[date];
-                    let dotClass = "bg-muted-foreground/20"; // gray - no tasks
-                    if (day && day.total > 0) {
-                      const ratio = day.completed / day.total;
-                      if (ratio >= 1) dotClass = "bg-green-500";
-                      else if (ratio > 0) dotClass = "bg-yellow-500";
-                      else dotClass = "bg-red-500";
-                    }
+                    const d = parseISO(date);
+                    const isWeekend = [0, 6].includes(d.getDay());
                     return (
-                      <th key={date} className="py-0.5 px-0.5 text-center">
-                        <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                      <th
+                        key={date}
+                        className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
+                          isWeekend ? "bg-muted/80" : ""
+                        }`}
+                      >
+                        <div>{format(d, "EEE")}</div>
+                        <div>{format(d, "M/d")}</div>
                       </th>
                     );
                   })}
-                  <th colSpan={3}></th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
+                  <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
                 </tr>
-              )}
-            </thead>
-            <tbody>
-              {filteredLines.length === 0 ? (
-                <tr>
-                  <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
-                    {filter ? "No matching tasks." : "No tasks yet. Use 'Pull Tasks' to select tasks from a custom date range, or add a custom line."}
-                  </td>
-                </tr>
-              ) : (
-                <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-                  {filteredLines.map((line) => (
-                    <LookaheadRow
-                      key={line.id}
-                      line={line}
-                      dates={dates}
-                      onStatusChange={handleStatusChange}
-                      onFieldChange={handleFieldChange}
-                      onDeleteLine={handleDeleteLine}
-                      onNameChange={handleNameChange}
-                      readOnly={isReadOnly}
-                      onRegisterRef={handleRegisterRef}
-                      onNavigate={handleCellNavigate}
-                    />
-                  ))}
-                </SortableContext>
-              )}
-            </tbody>
-          </table>
-        </DndContext>
-      </div>
+                {/* Per-day PPC indicator row */}
+                {ppcStats.planned > 0 && (
+                  <tr className="bg-muted/30">
+                    <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
+                      Daily PPC
+                    </th>
+                    {dates.map((date) => {
+                      const day = ppcStats.perDay[date];
+                      let dotClass = "bg-muted-foreground/20";
+                      if (day && day.total > 0) {
+                        const ratio = day.completed / day.total;
+                        if (ratio >= 1) dotClass = "bg-green-500";
+                        else if (ratio > 0) dotClass = "bg-yellow-500";
+                        else dotClass = "bg-red-500";
+                      }
+                      return (
+                        <th key={date} className="py-0.5 px-0.5 text-center">
+                          <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                        </th>
+                      );
+                    })}
+                    <th colSpan={3}></th>
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {filteredLines.length === 0 ? (
+                  <tr>
+                    <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
+                      {filter ? "No matching tasks." : "No tasks yet. Use 'Pull Tasks' to select tasks from a custom date range, or add a custom line."}
+                    </td>
+                  </tr>
+                ) : (
+                  <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                    {filteredLines.map((line) => (
+                      <LookaheadRow
+                        key={line.id}
+                        line={line}
+                        dates={dates}
+                        onStatusChange={handleStatusChange}
+                        onFieldChange={handleFieldChange}
+                        onDeleteLine={handleDeleteLine}
+                        onNameChange={handleNameChange}
+                        readOnly={isReadOnly}
+                        onRegisterRef={handleRegisterRef}
+                        onNavigate={handleCellNavigate}
+                      />
+                    ))}
+                  </SortableContext>
+                )}
+              </tbody>
+            </table>
+          </DndContext>
+        </div>
+      )}
     </div>
   );
 }
