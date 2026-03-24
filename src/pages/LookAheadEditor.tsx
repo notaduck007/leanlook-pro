@@ -42,6 +42,7 @@ export default function LookAheadEditor() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState("");
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
