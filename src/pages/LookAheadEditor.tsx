@@ -5,9 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { format, addDays, parseISO, subWeeks, isBefore, isAfter } from "date-fns";
+import { format, addDays, parseISO, subWeeks, isBefore, isAfter, formatDistanceToNow } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
@@ -28,6 +28,8 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
+type SaveStatus = "saved" | "saving" | "unsaved";
+
 export default function LookAheadEditor() {
   const { id: projectId, lookaheadId } = useParams<{ id: string; lookaheadId: string }>();
   const { user, profile, roles } = useAuth();
@@ -38,11 +40,16 @@ export default function LookAheadEditor() {
   const [project, setProject] = useState<any>(null);
   const [lines, setLines] = useState<LookaheadLineData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState("");
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const saveDraftRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [, setTick] = useState(0); // force re-render for "X ago" text
+  const isDirty = useRef(false);
+  const linesRef = useRef<LookaheadLineData[]>([]);
+  const isSavingRef = useRef(false);
 
   const isAdmin = roles.includes("admin");
   const isPM = roles.includes("pm");
@@ -58,6 +65,11 @@ export default function LookAheadEditor() {
         format(addDays(parseISO(lookAhead.week_start_date), i), "yyyy-MM-dd")
       )
     : [];
+
+  // Keep linesRef in sync
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
 
   const fetchData = useCallback(async () => {
     if (!lookaheadId || !projectId) return;
@@ -111,9 +123,97 @@ export default function LookAheadEditor() {
     fetchData();
   }, [fetchData]);
 
-  const scheduleSave = useCallback(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => saveDraftRef.current(), 2000);
+  const markDirty = useCallback(() => {
+    isDirty.current = true;
+    setSaveStatus("unsaved");
+  }, []);
+
+  const saveDraft = useCallback(async () => {
+    if (isSavingRef.current) return;
+    const currentLines = linesRef.current;
+    if (currentLines.length === 0) return;
+
+    isSavingRef.current = true;
+    setSaveStatus("saving");
+
+    try {
+      const updates = currentLines.map((l) =>
+        supabase
+          .from("lookahead_lines")
+          .update({
+            status_per_day: l.status_per_day,
+            notes: l.notes,
+            assigned_trade: l.assigned_trade,
+            materials_needed: l.materials_needed,
+            constraints: l.constraints,
+            custom_text: l.custom_text,
+          })
+          .eq("id", l.id)
+      );
+      await Promise.all(updates);
+      isDirty.current = false;
+      setLastSavedAt(new Date());
+      setSaveStatus("saved");
+    } catch (e) {
+      console.error("Auto-save failed:", e);
+      setSaveStatus("unsaved");
+    } finally {
+      isSavingRef.current = false;
+    }
+  }, []);
+
+  // Auto-save interval: check every 2s if dirty
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isDirty.current && !isSavingRef.current) {
+        saveDraft();
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [saveDraft]);
+
+  // Tick for "saved X ago" display
+  useEffect(() => {
+    const ticker = setInterval(() => setTick((t) => t + 1), 10000);
+    return () => clearInterval(ticker);
+  }, []);
+
+  // Save on beforeunload
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty.current) {
+        saveDraft();
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveDraft]);
+
+  // Save on unmount if dirty
+  useEffect(() => {
+    return () => {
+      if (isDirty.current) {
+        // Fire and forget on unmount
+        const currentLines = linesRef.current;
+        if (currentLines.length > 0) {
+          const updates = currentLines.map((l) =>
+            supabase
+              .from("lookahead_lines")
+              .update({
+                status_per_day: l.status_per_day,
+                notes: l.notes,
+                assigned_trade: l.assigned_trade,
+                materials_needed: l.materials_needed,
+                constraints: l.constraints,
+                custom_text: l.custom_text,
+              })
+              .eq("id", l.id)
+          );
+          Promise.all(updates).catch(console.error);
+        }
+      }
+    };
   }, []);
 
   const handleStatusChange = (lineId: string, date: string, status: DayStatus) => {
@@ -124,34 +224,31 @@ export default function LookAheadEditor() {
           : l
       )
     );
-    scheduleSave();
+    markDirty();
   };
 
   const handleFieldChange = (lineId: string, field: string, value: string) => {
     setLines((prev) =>
       prev.map((l) => (l.id === lineId ? { ...l, [field]: value } : l))
     );
-    scheduleSave();
+    markDirty();
   };
 
   const handleNameChange = async (lineId: string, newName: string) => {
     const line = lines.find((l) => l.id === lineId);
     if (!line) return;
 
-    // Update local state
     setLines((prev) =>
       prev.map((l) => l.id === lineId ? { ...l, task_name: newName, custom_text: newName } : l)
     );
 
-    // Persist: update custom_text on lookahead_lines
     await supabase.from("lookahead_lines").update({ custom_text: newName }).eq("id", lineId);
 
-    // If linked to a master task, update that too
     if (line.task_id) {
       await supabase.from("tasks").update({ name: newName }).eq("id", line.task_id);
     }
 
-    scheduleSave();
+    markDirty();
   };
 
   const handleDeleteLine = async (lineId: string) => {
@@ -170,32 +267,11 @@ export default function LookAheadEditor() {
     const reordered = arrayMove(lines, oldIndex, newIndex).map((l, i) => ({ ...l, sort_order: i }));
     setLines(reordered);
 
-    // Persist sort orders
     const updates = reordered.map((l) =>
       supabase.from("lookahead_lines").update({ sort_order: l.sort_order }).eq("id", l.id)
     );
     await Promise.all(updates);
   };
-
-  const saveDraft = async () => {
-    setSaving(true);
-    const updates = lines.map((l) =>
-      supabase
-        .from("lookahead_lines")
-        .update({
-          status_per_day: l.status_per_day,
-          notes: l.notes,
-          assigned_trade: l.assigned_trade,
-          materials_needed: l.materials_needed,
-          constraints: l.constraints,
-          custom_text: l.custom_text,
-        })
-        .eq("id", l.id)
-    );
-    await Promise.all(updates);
-    setSaving(false);
-  };
-  saveDraftRef.current = saveDraft;
 
   const sendNotification = async (targetUserId: string, title: string, message: string) => {
     if (!profile?.company_id) return;
@@ -206,6 +282,13 @@ export default function LookAheadEditor() {
       message,
       link: `/projects/${projectId}/lookahead/${lookaheadId}`,
     });
+  };
+
+  const handleNavigateBack = async () => {
+    if (isDirty.current) {
+      await saveDraft();
+    }
+    navigate(`/projects/${projectId}`);
   };
 
   const handleSubmit = async () => {
@@ -329,8 +412,8 @@ export default function LookAheadEditor() {
       return;
     }
 
-    const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
-    const newTasks = overlappingTasks.filter((t) => !existingTaskIds.has(t.id));
+    const existingIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
+    const newTasks = overlappingTasks.filter((t) => !existingIds.has(t.id));
 
     const { data: templates } = await supabase
       .from("task_templates")
@@ -426,7 +509,8 @@ export default function LookAheadEditor() {
       })
     );
 
-    setTimeout(() => saveDraftRef.current(), 500);
+    // Mark dirty so auto-save picks it up
+    markDirty();
     toast({
       title: "Smart Fill complete",
       description: `${addedCount} tasks added from schedule, ${filled} cells marked as planned based on task dates.`,
@@ -476,8 +560,8 @@ export default function LookAheadEditor() {
       taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
     }
 
-    const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
-    const newLines = incompleteLines.filter((l) => !l.task_id || !existingTaskIds.has(l.task_id));
+    const existingIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
+    const newLines = incompleteLines.filter((l) => !l.task_id || !existingIds.has(l.task_id));
 
     if (!newLines.length) {
       toast({ title: "All carry-over tasks already exist in this look-ahead" });
@@ -540,16 +624,44 @@ export default function LookAheadEditor() {
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
+  const renderSaveStatus = () => {
+    if (saveStatus === "saving") {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Saving…
+        </span>
+      );
+    }
+    if (saveStatus === "unsaved") {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+          <CircleDot className="h-3 w-3" />
+          Unsaved changes
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+        <Check className="h-3 w-3" />
+        Saved{lastSavedAt ? ` ${formatDistanceToNow(lastSavedAt, { addSuffix: true })}` : ""}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${projectId}`)}>
+          <Button variant="ghost" size="sm" onClick={handleNavigateBack}>
             <ArrowLeft className="mr-1 h-4 w-4" /> Back
           </Button>
           <div>
-            <h1 className="text-xl font-bold">{project?.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold">{project?.name}</h1>
+              {renderSaveStatus()}
+            </div>
             <p className="text-sm text-muted-foreground">
               Week of {lookAhead ? format(parseISO(lookAhead.week_start_date), "MMM d, yyyy") : "..."} ·{" "}
               <span className="capitalize">{lookAhead?.status}</span> · {lines.length} tasks
@@ -586,8 +698,8 @@ export default function LookAheadEditor() {
               <Button variant="outline" size="sm" onClick={handleAddCustomLine}>
                 <Plus className="mr-1 h-3.5 w-3.5" /> Add Line
               </Button>
-              <Button variant="outline" size="sm" onClick={saveDraft} disabled={saving}>
-                <Save className="mr-1 h-3.5 w-3.5" /> {saving ? "Saving..." : "Save"}
+              <Button variant="outline" size="sm" onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
+                <Save className="mr-1 h-3.5 w-3.5" /> {saveStatus === "saving" ? "Saving..." : "Save"}
               </Button>
               <Button size="sm" onClick={handleSubmit} disabled={submitting}>
                 <SendHorizonal className="mr-1 h-3.5 w-3.5" /> Submit
