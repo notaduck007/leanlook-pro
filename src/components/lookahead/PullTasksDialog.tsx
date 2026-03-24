@@ -29,6 +29,14 @@ interface TaskPreview {
   children: TaskPreview[];
 }
 
+interface SearchMeta {
+  versionNumber: number | null;
+  minStart: string | null;
+  maxFinish: string | null;
+  overlapCount: number;
+  totalCount: number;
+}
+
 export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTaskIds, dates, onTasksPulled }: PullTasksDialogProps) {
   const [open, setOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date>();
@@ -39,6 +47,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   const [pulling, setPulling] = useState(false);
   const [searched, setSearched] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [searchMeta, setSearchMeta] = useState<SearchMeta | null>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -50,98 +59,158 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
 
   const handleSearch = async () => {
     if (!startDate || !endDate) return;
+
     setLoading(true);
+    setSearched(false);
+    setTasks([]);
+    setExpandedIds(new Set());
+    setSearchMeta(null);
 
     const searchStart = includeBuffer ? subDays(startDate, 14) : startDate;
     const searchEnd = includeBuffer ? addDays(endDate, 14) : endDate;
 
     const { data: versions } = await supabase
       .from("schedule_versions")
-      .select("id")
+      .select("id, version_number, uploaded_at")
       .eq("project_id", projectId)
-      .order("version_number", { ascending: false })
-      .limit(1);
+      .order("version_number", { ascending: false });
 
-    if (!versions?.length) { setLoading(false); return; }
+    if (!versions?.length) {
+      setSearched(true);
+      setLoading(false);
+      return;
+    }
 
+    const versionIds = versions.map((version) => version.id);
     const { data: allTasks } = await supabase
       .from("tasks")
       .select("*")
-      .eq("schedule_version_id", versions[0].id);
+      .in("schedule_version_id", versionIds);
 
-    const all = allTasks || [];
+    const tasksByVersion = new Map<string, any[]>();
+    versions.forEach((version) => tasksByVersion.set(version.id, []));
+    (allTasks || []).forEach((task) => {
+      const bucket = tasksByVersion.get(task.schedule_version_id);
+      if (bucket) bucket.push(task);
+    });
 
-    // Filter tasks that overlap the date range
+    const versionSummaries = versions.map((version) => {
+      const versionTasks = tasksByVersion.get(version.id) || [];
+      let minStart: string | null = null;
+      let maxFinish: string | null = null;
+      let overlapCount = 0;
+
+      versionTasks.forEach((task) => {
+        if (task.start_date && (!minStart || task.start_date < minStart)) minStart = task.start_date;
+        if (task.finish_date && (!maxFinish || task.finish_date > maxFinish)) maxFinish = task.finish_date;
+
+        if (!task.start_date && !task.finish_date) return;
+
+        const taskStart = task.start_date ? parseISO(task.start_date) : null;
+        const taskEnd = task.finish_date ? parseISO(task.finish_date) : taskStart;
+        if (!taskStart && !taskEnd) return;
+
+        if ((!taskStart || !isAfter(taskStart, searchEnd)) && (!taskEnd || !isBefore(taskEnd, searchStart))) {
+          overlapCount += 1;
+        }
+      });
+
+      return {
+        id: version.id,
+        versionNumber: version.version_number ?? null,
+        minStart,
+        maxFinish,
+        overlapCount,
+        totalCount: versionTasks.length,
+        hasDatedTasks: Boolean(minStart || maxFinish),
+      };
+    });
+
+    const activeVersion =
+      versionSummaries.find((summary) => summary.overlapCount > 0) ||
+      versionSummaries.find((summary) => summary.hasDatedTasks) ||
+      versionSummaries[0];
+
+    const all = tasksByVersion.get(activeVersion.id) || [];
+
     const overlapping = new Set<string>();
-    all.forEach((t) => {
-      if (!t.start_date && !t.finish_date) return;
-      const ts = t.start_date ? parseISO(t.start_date) : null;
-      const te = t.finish_date ? parseISO(t.finish_date) : ts;
-      if (!ts && !te) return;
-      if ((!ts || !isAfter(ts, searchEnd)) && (!te || !isBefore(te, searchStart))) {
-        overlapping.add(t.id);
+    all.forEach((task) => {
+      if (!task.start_date && !task.finish_date) return;
+      const taskStart = task.start_date ? parseISO(task.start_date) : null;
+      const taskEnd = task.finish_date ? parseISO(task.finish_date) : taskStart;
+      if (!taskStart && !taskEnd) return;
+
+      if ((!taskStart || !isAfter(taskStart, searchEnd)) && (!taskEnd || !isBefore(taskEnd, searchStart))) {
+        overlapping.add(task.id);
       }
     });
 
-    // Also include parents of overlapping tasks, and children of overlapping parents
     const parentIds = new Set<string>();
-    all.forEach((t) => {
-      if (overlapping.has(t.id) && t.parent_id) parentIds.add(t.parent_id);
-    });
-    // Include children whose parent is in the overlapping set
-    all.forEach((t) => {
-      if (t.parent_id && overlapping.has(t.parent_id)) overlapping.add(t.id);
+    all.forEach((task) => {
+      if (overlapping.has(task.id) && task.parent_id) parentIds.add(task.parent_id);
     });
 
-    // Build hierarchy: top-level = no parent or parent not in result set
+    all.forEach((task) => {
+      if (task.parent_id && overlapping.has(task.parent_id)) overlapping.add(task.id);
+    });
+
     const taskMap = new Map<string, TaskPreview>();
     const resultIds = new Set([...overlapping, ...parentIds]);
 
-    all.filter((t) => resultIds.has(t.id)).forEach((t) => {
-      taskMap.set(t.id, {
-        id: t.id,
-        name: t.name,
-        start_date: t.start_date,
-        finish_date: t.finish_date,
-        tags: (t.tags as string[]) || [],
-        parent_id: t.parent_id,
-        selected: !existingTaskIds.has(t.id),
-        children: [],
+    all
+      .filter((task) => resultIds.has(task.id))
+      .forEach((task) => {
+        taskMap.set(task.id, {
+          id: task.id,
+          name: task.name,
+          start_date: task.start_date,
+          finish_date: task.finish_date,
+          tags: (task.tags as string[]) || [],
+          parent_id: task.parent_id,
+          selected: !existingTaskIds.has(task.id),
+          children: [],
+        });
       });
-    });
 
-    // Nest children under parents
     const topLevel: TaskPreview[] = [];
-    taskMap.forEach((t) => {
-      if (t.parent_id && taskMap.has(t.parent_id)) {
-        taskMap.get(t.parent_id)!.children.push(t);
+    taskMap.forEach((task) => {
+      if (task.parent_id && taskMap.has(task.parent_id)) {
+        taskMap.get(task.parent_id)!.children.push(task);
       } else {
-        topLevel.push(t);
+        topLevel.push(task);
       }
     });
 
-    // Auto-expand parents with children
     const expanded = new Set<string>();
-    topLevel.forEach((t) => { if (t.children.length > 0) expanded.add(t.id); });
-    setExpandedIds(expanded);
+    topLevel.forEach((task) => {
+      if (task.children.length > 0) expanded.add(task.id);
+    });
 
+    setExpandedIds(expanded);
     setTasks(topLevel);
+    setSearchMeta({
+      versionNumber: activeVersion.versionNumber,
+      minStart: activeVersion.minStart,
+      maxFinish: activeVersion.maxFinish,
+      overlapCount: activeVersion.overlapCount,
+      totalCount: activeVersion.totalCount,
+    });
     setSearched(true);
     setLoading(false);
   };
 
   const getAllFlat = (items: TaskPreview[]): TaskPreview[] => {
     const result: TaskPreview[] = [];
-    items.forEach((t) => {
-      result.push(t);
-      result.push(...t.children);
+    items.forEach((task) => {
+      result.push(task);
+      result.push(...task.children);
     });
     return result;
   };
 
   const handlePull = async () => {
     const allFlat = getAllFlat(tasks);
-    const selected = allFlat.filter((t) => t.selected && !existingTaskIds.has(t.id));
+    const selected = allFlat.filter((task) => task.selected && !existingTaskIds.has(task.id));
     if (!selected.length) return;
     setPulling(true);
 
@@ -150,30 +219,30 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
       .select("*")
       .eq("company_id", companyId);
     const templateMap = new Map<string, any>();
-    (templates || []).forEach((t) => templateMap.set(t.tag.toLowerCase(), t));
+    (templates || []).forEach((template) => templateMap.set(template.tag.toLowerCase(), template));
 
-    const inserts = selected.map((t, i) => {
-      const taskTags = t.tags || [];
+    const inserts = selected.map((task, i) => {
+      const taskTags = task.tags || [];
       let materials: string | null = null;
       let constraints: string | null = null;
       for (const tag of taskTags) {
-        const tmpl = templateMap.get(tag.toLowerCase());
-        if (tmpl) {
-          const items = (tmpl.checklist_items as any[]) || [];
-          materials = items.filter((c: any) => c.type === "material").map((c: any) => c.text).join(", ") || null;
-          constraints = items.filter((c: any) => c.type === "constraint").map((c: any) => c.text).join(", ") || null;
+        const template = templateMap.get(tag.toLowerCase());
+        if (template) {
+          const items = (template.checklist_items as any[]) || [];
+          materials = items.filter((item: any) => item.type === "material").map((item: any) => item.text).join(", ") || null;
+          constraints = items.filter((item: any) => item.type === "constraint").map((item: any) => item.text).join(", ") || null;
           break;
         }
       }
 
       const statusPerDay: Record<string, string> = {};
-      if (t.start_date && t.finish_date) {
-        for (const d of dates) {
-          const dp = parseISO(d);
-          const ts = parseISO(t.start_date);
-          const te = parseISO(t.finish_date);
-          if (!isBefore(dp, ts) && !isAfter(dp, te)) {
-            statusPerDay[d] = "planned";
+      if (task.start_date && task.finish_date) {
+        for (const date of dates) {
+          const currentDate = parseISO(date);
+          const taskStart = parseISO(task.start_date);
+          const taskEnd = parseISO(task.finish_date);
+          if (!isBefore(currentDate, taskStart) && !isAfter(currentDate, taskEnd)) {
+            statusPerDay[date] = "planned";
           }
         }
       }
@@ -181,7 +250,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
       return {
         lookahead_id: lookaheadId,
         company_id: companyId,
-        task_id: t.id,
+        task_id: task.id,
         sort_order: i,
         status_per_day: statusPerDay,
         assigned_trade: taskTags.join(", ") || null,
@@ -198,48 +267,47 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
 
   const toggleTask = (id: string, checked: boolean) => {
     setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          // Toggle parent + all children together
-          const newChildren = t.children.map((c) => ({
-            ...c,
-            selected: existingTaskIds.has(c.id) ? false : checked,
+      prev.map((task) => {
+        if (task.id === id) {
+          const newChildren = task.children.map((child) => ({
+            ...child,
+            selected: existingTaskIds.has(child.id) ? false : checked,
           }));
-          return { ...t, selected: existingTaskIds.has(t.id) ? false : checked, children: newChildren };
+          return { ...task, selected: existingTaskIds.has(task.id) ? false : checked, children: newChildren };
         }
-        // Check if it's a child
-        const newChildren = t.children.map((c) =>
-          c.id === id ? { ...c, selected: existingTaskIds.has(c.id) ? false : checked } : c
+
+        const newChildren = task.children.map((child) =>
+          child.id === id ? { ...child, selected: existingTaskIds.has(child.id) ? false : checked } : child
         );
-        return { ...t, children: newChildren };
+        return { ...task, children: newChildren };
       })
     );
   };
 
   const toggleAll = (checked: boolean) => {
     setTasks((prev) =>
-      prev.map((t) => ({
-        ...t,
-        selected: existingTaskIds.has(t.id) ? false : checked,
-        children: t.children.map((c) => ({
-          ...c,
-          selected: existingTaskIds.has(c.id) ? false : checked,
+      prev.map((task) => ({
+        ...task,
+        selected: existingTaskIds.has(task.id) ? false : checked,
+        children: task.children.map((child) => ({
+          ...child,
+          selected: existingTaskIds.has(child.id) ? false : checked,
         })),
       }))
     );
   };
 
   const allFlat = getAllFlat(tasks);
-  const selectable = allFlat.filter((t) => !existingTaskIds.has(t.id));
-  const selectedCount = allFlat.filter((t) => t.selected && !existingTaskIds.has(t.id)).length;
+  const selectable = allFlat.filter((task) => !existingTaskIds.has(task.id));
+  const selectedCount = allFlat.filter((task) => task.selected && !existingTaskIds.has(task.id)).length;
 
-  const renderTask = (t: TaskPreview, depth: number = 0) => {
-    const alreadyExists = existingTaskIds.has(t.id);
-    const hasChildren = t.children.length > 0;
-    const isExpanded = expandedIds.has(t.id);
+  const renderTask = (task: TaskPreview, depth: number = 0) => {
+    const alreadyExists = existingTaskIds.has(task.id);
+    const hasChildren = task.children.length > 0;
+    const isExpanded = expandedIds.has(task.id);
 
     return (
-      <div key={t.id}>
+      <div key={task.id}>
         <div
           className={cn(
             "flex items-center gap-2 px-2 py-1.5 border-b last:border-0 text-sm",
@@ -248,29 +316,29 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           style={{ paddingLeft: `${8 + depth * 20}px` }}
         >
           {hasChildren ? (
-            <button onClick={() => toggleExpand(t.id)} className="p-0.5 hover:bg-muted rounded">
+            <button type="button" onClick={() => toggleExpand(task.id)} className="p-0.5 hover:bg-muted rounded">
               {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             </button>
           ) : (
             <span className="w-5" />
           )}
           <Checkbox
-            checked={t.selected}
+            checked={task.selected}
             disabled={alreadyExists}
-            onCheckedChange={(c) => toggleTask(t.id, !!c)}
+            onCheckedChange={(checked) => toggleTask(task.id, !!checked)}
           />
           <div className="flex-1 min-w-0">
-            <span className={cn("truncate block", hasChildren && "font-medium")}>{t.name}</span>
-            {t.start_date && (
+            <span className={cn("truncate block", hasChildren && "font-medium")}>{task.name}</span>
+            {task.start_date && (
               <span className="text-xs text-muted-foreground">
-                {format(parseISO(t.start_date), "MMM d")} — {t.finish_date ? format(parseISO(t.finish_date), "MMM d") : "?"}
+                {format(parseISO(task.start_date), "MMM d")} — {task.finish_date ? format(parseISO(task.finish_date), "MMM d") : "?"}
               </span>
             )}
           </div>
           {alreadyExists && <span className="text-xs text-muted-foreground italic">Already added</span>}
-          {hasChildren && <span className="text-xs text-muted-foreground">{t.children.length} subtasks</span>}
+          {hasChildren && <span className="text-xs text-muted-foreground">{task.children.length} subtasks</span>}
         </div>
-        {hasChildren && isExpanded && t.children.map((c) => renderTask(c, depth + 1))}
+        {hasChildren && isExpanded && task.children.map((child) => renderTask(child, depth + 1))}
       </div>
     );
   };
@@ -320,7 +388,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           </div>
 
           <div className="flex items-center gap-2 pb-1">
-            <Checkbox id="buffer" checked={includeBuffer} onCheckedChange={(c) => setIncludeBuffer(!!c)} />
+            <Checkbox id="buffer" checked={includeBuffer} onCheckedChange={(checked) => setIncludeBuffer(!!checked)} />
             <label htmlFor="buffer" className="text-xs">±2 weeks buffer</label>
           </div>
 
@@ -335,9 +403,18 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           </p>
         )}
 
+        {searchMeta?.minStart && searchMeta?.maxFinish && (
+          <p className="text-xs text-muted-foreground">
+            Using schedule v{searchMeta.versionNumber ?? "?"} · imported task dates {format(parseISO(searchMeta.minStart), "MMM d, yyyy")} — {format(parseISO(searchMeta.maxFinish), "MMM d, yyyy")}
+          </p>
+        )}
+
         {searched && tasks.length === 0 && (
           <div className="text-center py-8 text-muted-foreground text-sm border rounded-md mt-2">
-            No tasks found in the selected date range. Your schedule data may use different dates.
+            No tasks matched this range.
+            {searchMeta?.minStart && searchMeta?.maxFinish
+              ? ` The imported schedule currently spans ${format(parseISO(searchMeta.minStart), "MMM d, yyyy")} — ${format(parseISO(searchMeta.maxFinish), "MMM d, yyyy")}.`
+              : " This schedule version does not currently contain dated tasks."}
           </div>
         )}
 
@@ -347,14 +424,14 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={selectedCount === selectable.length && selectedCount > 0}
-                  onCheckedChange={(c) => toggleAll(!!c)}
+                  onCheckedChange={(checked) => toggleAll(!!checked)}
                 />
                 <span className="text-xs font-medium">{selectedCount} selected</span>
               </div>
               <span className="text-xs text-muted-foreground">{allFlat.length} tasks found</span>
             </div>
             <div className="max-h-[300px] overflow-auto">
-              {tasks.map((t) => renderTask(t))}
+              {tasks.map((task) => renderTask(task))}
             </div>
           </div>
         )}
