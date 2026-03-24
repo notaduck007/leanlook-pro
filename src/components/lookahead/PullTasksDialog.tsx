@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { format, addDays, subDays, parseISO, isBefore, isAfter } from "date-fns";
-import { CalendarIcon, Download, ChevronRight, ChevronDown } from "lucide-react";
+import { format, addDays, subDays, parseISO, isBefore, isAfter, differenceInCalendarDays } from "date-fns";
+import { CalendarIcon, Download, ChevronRight, ChevronDown, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface PullTasksDialogProps {
   projectId: string;
@@ -27,6 +28,7 @@ interface TaskPreview {
   parent_id: string | null;
   selected: boolean;
   children: TaskPreview[];
+  overlapDays: number;
 }
 
 interface SearchMeta {
@@ -36,6 +38,8 @@ interface SearchMeta {
   overlapCount: number;
   totalCount: number;
 }
+
+type FilterMode = "all" | "overlapping";
 
 export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTaskIds, dates, onTasksPulled }: PullTasksDialogProps) {
   const [open, setOpen] = useState(false);
@@ -48,6 +52,25 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   const [searched, setSearched] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchMeta, setSearchMeta] = useState<SearchMeta | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const { toast } = useToast();
+
+  // Compute the lookahead 2-week window from dates prop
+  const lookaheadStart = dates.length > 0 ? parseISO(dates[0]) : null;
+  const lookaheadEnd = dates.length > 0 ? parseISO(dates[dates.length - 1]) : null;
+
+  const computeOverlapDays = (taskStartStr: string | null, taskFinishStr: string | null): number => {
+    if (!lookaheadStart || !lookaheadEnd || (!taskStartStr && !taskFinishStr)) return 0;
+    const taskStart = taskStartStr ? parseISO(taskStartStr) : null;
+    const taskEnd = taskFinishStr ? parseISO(taskFinishStr) : taskStart;
+    if (!taskStart || !taskEnd) return 0;
+
+    const overlapStart = isBefore(taskStart, lookaheadStart) ? lookaheadStart : taskStart;
+    const overlapEnd = isAfter(taskEnd, lookaheadEnd) ? lookaheadEnd : taskEnd;
+
+    if (isAfter(overlapStart, overlapEnd)) return 0;
+    return differenceInCalendarDays(overlapEnd, overlapStart) + 1;
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -65,6 +88,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     setTasks([]);
     setExpandedIds(new Set());
     setSearchMeta(null);
+    setFilterMode("all");
 
     const searchStart = includeBuffer ? subDays(startDate, 14) : startDate;
     const searchEnd = includeBuffer ? addDays(endDate, 14) : endDate;
@@ -169,6 +193,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           parent_id: task.parent_id,
           selected: !existingTaskIds.has(task.id),
           children: [],
+          overlapDays: computeOverlapDays(task.start_date, task.finish_date),
         });
       });
 
@@ -221,6 +246,8 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     const templateMap = new Map<string, any>();
     (templates || []).forEach((template) => templateMap.set(template.tag.toLowerCase(), template));
 
+    let plannedCellCount = 0;
+
     const inserts = selected.map((task, i) => {
       const taskTags = task.tags || [];
       let materials: string | null = null;
@@ -243,6 +270,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           const taskEnd = parseISO(task.finish_date);
           if (!isBefore(currentDate, taskStart) && !isAfter(currentDate, taskEnd)) {
             statusPerDay[date] = "planned";
+            plannedCellCount++;
           }
         }
       }
@@ -262,6 +290,14 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     await supabase.from("lookahead_lines").insert(inserts);
     setPulling(false);
     setOpen(false);
+
+    toast({
+      title: `Pulled ${selected.length} tasks`,
+      description: plannedCellCount > 0
+        ? `${plannedCellCount} cells auto-marked as planned based on schedule dates.`
+        : "No date overlap with this 2-week window — mark statuses manually.",
+    });
+
     onTasksPulled();
   };
 
@@ -297,9 +333,45 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     );
   };
 
+  const selectOverlappingOnly = () => {
+    setTasks((prev) =>
+      prev.map((task) => ({
+        ...task,
+        selected: existingTaskIds.has(task.id) ? false : task.overlapDays > 0,
+        children: task.children.map((child) => ({
+          ...child,
+          selected: existingTaskIds.has(child.id) ? false : child.overlapDays > 0,
+        })),
+      }))
+    );
+    setFilterMode("overlapping");
+  };
+
+  const selectAll = () => {
+    toggleAll(true);
+    setFilterMode("all");
+  };
+
   const allFlat = getAllFlat(tasks);
   const selectable = allFlat.filter((task) => !existingTaskIds.has(task.id));
   const selectedCount = allFlat.filter((task) => task.selected && !existingTaskIds.has(task.id)).length;
+  const overlappingCount = allFlat.filter((t) => t.overlapDays > 0 && !existingTaskIds.has(t.id)).length;
+
+  const renderOverlapBadge = (overlapDays: number) => {
+    if (overlapDays === 0) return null;
+    const totalDays = dates.length;
+    const pct = Math.round((overlapDays / totalDays) * 100);
+    return (
+      <span className={cn(
+        "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0",
+        pct >= 75 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+        pct >= 30 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+        "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+      )}>
+        {overlapDays}/{totalDays}d
+      </span>
+    );
+  };
 
   const renderTask = (task: TaskPreview, depth: number = 0) => {
     const alreadyExists = existingTaskIds.has(task.id);
@@ -335,6 +407,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
               </span>
             )}
           </div>
+          {renderOverlapBadge(task.overlapDays)}
           {alreadyExists && <span className="text-xs text-muted-foreground italic">Already added</span>}
           {hasChildren && <span className="text-xs text-muted-foreground">{task.children.length} subtasks</span>}
         </div>
@@ -420,7 +493,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
 
         {tasks.length > 0 && (
           <div className="flex-1 overflow-auto border rounded-md mt-2">
-            <div className="flex items-center justify-between p-2 border-b bg-muted/30">
+            <div className="flex items-center justify-between p-2 border-b bg-muted/30 gap-2">
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={selectedCount === selectable.length && selectedCount > 0}
@@ -428,7 +501,30 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
                 />
                 <span className="text-xs font-medium">{selectedCount} selected</span>
               </div>
-              <span className="text-xs text-muted-foreground">{allFlat.length} tasks found</span>
+              <div className="flex items-center gap-1.5">
+                {overlappingCount > 0 && overlappingCount < selectable.length && (
+                  <>
+                    <Button
+                      variant={filterMode === "overlapping" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-6 text-[11px] px-2"
+                      onClick={selectOverlappingOnly}
+                    >
+                      <Filter className="mr-1 h-3 w-3" />
+                      This window only ({overlappingCount})
+                    </Button>
+                    <Button
+                      variant={filterMode === "all" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-6 text-[11px] px-2"
+                      onClick={selectAll}
+                    >
+                      Select all ({selectable.length})
+                    </Button>
+                  </>
+                )}
+                <span className="text-xs text-muted-foreground">{allFlat.length} tasks found</span>
+              </div>
             </div>
             <div className="max-h-[300px] overflow-auto">
               {tasks.map((task) => renderTask(task))}
