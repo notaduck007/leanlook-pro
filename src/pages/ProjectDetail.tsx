@@ -124,7 +124,7 @@ export default function ProjectDetail() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-hidden">
       <div className="flex items-center gap-4">
         <Button variant="ghost" onClick={() => navigate("/projects")}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back
@@ -275,7 +275,7 @@ export default function ProjectDetail() {
 
       {/* Gantt Chart */}
       {tasks.length > 0 && (
-        <Card>
+        <Card className="overflow-hidden">
           <Collapsible defaultOpen>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Schedule Timeline</CardTitle>
@@ -284,7 +284,7 @@ export default function ProjectDetail() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-              <CardContent>
+              <CardContent className="p-0">
                 <GanttChart tasks={tasks} />
               </CardContent>
             </CollapsibleContent>
