@@ -1044,6 +1044,7 @@ export default function LookAheadEditor() {
                         readOnly={isReadOnly}
                         onRegisterRef={handleRegisterRef}
                         onNavigate={handleCellNavigate}
+                        comparisonData={showComparison ? comparisonData : undefined}
                       />
                     ))}
                   </SortableContext>
@@ -1052,6 +1053,11 @@ export default function LookAheadEditor() {
             </table>
           </DndContext>
         </div>
+      )}
+
+      {/* Removed tasks section (comparison mode) */}
+      {showComparison && comparisonData && (
+        <RemovedTasksSection removedLines={comparisonData.removedLines} />
       )}
     </div>
   );
