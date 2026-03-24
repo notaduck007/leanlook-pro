@@ -64,6 +64,11 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     }
   };
 
+  const isNewTask = comparisonData && (() => {
+    const key = line.task_id || line.custom_text || "";
+    return key ? comparisonData.newLineKeys.has(key) : false;
+  })();
+
   return (
     <>
       <tr
@@ -72,7 +77,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         className={cn(
           "border-b border-border hover:bg-muted/30 transition-colors",
           line.is_parent && "bg-muted/20 font-medium",
-          isDragging && "bg-accent/40"
+          isDragging && "bg-accent/40",
+          isNewTask && "border-l-2 border-l-blue-500"
         )}
       >
         {/* Task Name */}
