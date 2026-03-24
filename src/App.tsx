@@ -17,6 +17,7 @@ import NewLookAhead from "./pages/NewLookAhead";
 import LookAheadEditor from "./pages/LookAheadEditor";
 import Analytics from "./pages/Analytics";
 import LookAheads from "./pages/LookAheads";
+import MasterTasks from "./pages/MasterTasks";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -69,6 +70,7 @@ function AppRoutes() {
       <Route path="/projects/:id/lookahead/new" element={<ProtectedRoute><NewLookAhead /></ProtectedRoute>} />
       <Route path="/projects/:id/lookahead/:lookaheadId" element={<ProtectedRoute><LookAheadEditor /></ProtectedRoute>} />
       <Route path="/lookaheads" element={<ProtectedRoute><LookAheads /></ProtectedRoute>} />
+      <Route path="/master-tasks" element={<ProtectedRoute><MasterTasks /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />

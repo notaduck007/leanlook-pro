@@ -153,6 +153,68 @@ export type Database = {
           },
         ]
       }
+      master_subtasks: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          master_task_id: string
+          name: string
+          sort_order: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          master_task_id: string
+          name: string
+          sort_order?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          master_task_id?: string
+          name?: string
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "master_subtasks_master_task_id_fkey"
+            columns: ["master_task_id"]
+            isOneToOne: false
+            referencedRelation: "master_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      master_tasks: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          name: string
+          normalized_name: string
+          tags: string[] | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          normalized_name: string
+          tags?: string[] | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          normalized_name?: string
+          tags?: string[] | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           company_id: string
