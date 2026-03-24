@@ -597,6 +597,37 @@ export default function LookAheadEditor() {
           <Button variant="outline" size="sm" onClick={() => generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates)}>
             <FileDown className="mr-1 h-3.5 w-3.5" /> Export PDF
           </Button>
+          {isOwner && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10">
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Look-Ahead?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete this look-ahead and all its task lines. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async () => {
+                      await supabase.from("lookahead_lines").delete().eq("lookahead_id", lookaheadId!);
+                      await supabase.from("look_aheads").delete().eq("id", lookaheadId!);
+                      toast({ title: "Look-ahead deleted" });
+                      navigate(`/projects/${projectId}`);
+                    }}
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
