@@ -485,7 +485,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" data-pull-tasks-trigger>
           <Download className="mr-1 h-3.5 w-3.5" /> Pull Tasks
         </Button>
       </DialogTrigger>
