@@ -817,6 +817,37 @@ export default function LookAheadEditor() {
         </div>
       </div>
 
+      {/* PPC Bar */}
+      {ppcStats.planned > 0 && (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-semibold">
+              PPC:{" "}
+              <span className={
+                ppcStats.ppc! >= 80 ? "text-green-600 dark:text-green-400" :
+                ppcStats.ppc! >= 60 ? "text-yellow-600 dark:text-yellow-400" :
+                "text-red-600 dark:text-red-400"
+              }>
+                {ppcStats.ppc}%
+              </span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {ppcStats.completed} of {ppcStats.planned} planned tasks completed
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                ppcStats.ppc! >= 80 ? "bg-green-500" :
+                ppcStats.ppc! >= 60 ? "bg-yellow-500" :
+                "bg-red-500"
+              }`}
+              style={{ width: `${ppcStats.ppc}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <StatusLegend />
