@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
 
 export interface LookaheadLineData {
   id: string;
@@ -32,9 +33,10 @@ interface LookaheadRowProps {
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
+  comparisonData?: ComparisonData | null;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly, onRegisterRef, onNavigate }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly, onRegisterRef, onNavigate, comparisonData }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");

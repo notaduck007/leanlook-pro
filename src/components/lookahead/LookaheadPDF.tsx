@@ -1,5 +1,6 @@
 import { LookaheadLineData } from "./LookaheadRow";
 import { DayStatus } from "./StatusCell";
+import { ComparisonData } from "./WeekComparison";
 import { format, parseISO } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -31,7 +32,8 @@ export async function generateLookaheadPDF(
   weekStart: string,
   superName: string,
   lines: LookaheadLineData[],
-  dates: string[]
+  dates: string[],
+  comparisonData?: ComparisonData | null
 ): Promise<void> {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -61,6 +63,8 @@ export async function generateLookaheadPDF(
   ];
 
   // Build rows
+  const lineKey = (taskId: string | null, customText: string | null) => taskId || customText || "";
+
   const rows = lines.map((line) => {
     const row: Record<string, string> = {
       task: line.task_name || line.custom_text || "",
@@ -68,6 +72,13 @@ export async function generateLookaheadPDF(
       notes: line.notes || "",
       materials: line.materials_needed || "",
     };
+    // Add comparison badge to task name
+    if (comparisonData) {
+      const key = lineKey(line.task_id, line.custom_text);
+      if (key && comparisonData.newLineKeys.has(key)) {
+        row.task = "[NEW] " + row.task;
+      }
+    }
     dates.forEach((d) => {
       row[d] = statusSymbol((line.status_per_day[d] as DayStatus) || "");
     });
@@ -80,7 +91,7 @@ export async function generateLookaheadPDF(
   const notesColWidth = 72;
   const materialsColWidth = 64;
   const fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
-  const availableForDates = pageWidth - 80 - fixedWidth; // 40px margin each side
+  const availableForDates = pageWidth - 80 - fixedWidth;
   const dateColWidth = Math.max(24, Math.floor(availableForDates / dates.length));
 
   const columnStyles: Record<string, any> = {
@@ -134,6 +145,15 @@ export async function generateLookaheadPDF(
         }
       }
 
+      // New task highlight - blue left border on task cell
+      if (data.section === "body" && data.column.dataKey === "task") {
+        const raw = data.cell.raw as string;
+        if (raw.startsWith("[NEW] ")) {
+          data.cell.styles.textColor = [30, 64, 175];
+          data.cell.styles.fontStyle = "bold";
+        }
+      }
+
       // Weekend shading for header
       if (data.section === "head" && dates.includes(data.column.dataKey)) {
         const dt = parseISO(data.column.dataKey);
@@ -147,11 +167,49 @@ export async function generateLookaheadPDF(
   });
 
   // Legend at bottom
-  const finalY = (doc as any).lastAutoTable?.finalY || 500;
+  let finalY = (doc as any).lastAutoTable?.finalY || 500;
   const legendY = finalY + 14;
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text("✓ Complete    ✕ Not Done    % Partial    ○ Planned    → In Progress", 40, legendY);
+  finalY = legendY;
+
+  // Week-over-week comparison summary
+  if (comparisonData) {
+    finalY += 20;
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Week-Over-Week Summary", 40, finalY);
+
+    finalY += 14;
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`• ${comparisonData.carriedOverCount} tasks carried over from last week`, 50, finalY);
+    finalY += 11;
+    doc.text(`• ${comparisonData.newCount} new tasks added this week`, 50, finalY);
+    finalY += 11;
+    doc.text(`• ${comparisonData.removedCount} tasks completed/removed since last week`, 50, finalY);
+    if (comparisonData.previousPPC !== null) {
+      finalY += 11;
+      doc.text(`• Last week's PPC: ${comparisonData.previousPPC}%`, 50, finalY);
+    }
+
+    // List removed tasks
+    if (comparisonData.removedLines.length > 0) {
+      finalY += 16;
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Completed/Removed Tasks:", 50, finalY);
+      comparisonData.removedLines.forEach((line) => {
+        finalY += 10;
+        if (finalY > doc.internal.pageSize.getHeight() - 40) {
+          doc.addPage();
+          finalY = 40;
+        }
+        doc.text(`  – ${line.task_name}${line.assigned_trade ? ` (${line.assigned_trade})` : ""}`, 56, finalY);
+      });
+    }
+  }
 
   // Page numbers
   const pageCount = doc.getNumberOfPages();
