@@ -216,7 +216,7 @@ export default function MasterTasks() {
                       <p className="text-xs text-muted-foreground italic">Loading subtasks...</p>
                     ) : (
                       (subtaskCache[task.id] || []).map((st, idx) => (
-                        <div key={st.id} className="flex items-center gap-2 py-1">
+                        <div key={st.id} className="group/subtask flex items-center gap-2 py-1">
                           <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
                           {editingSubtaskId === st.id ? (
                             <div className="flex items-center gap-1 flex-1">
