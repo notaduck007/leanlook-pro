@@ -53,6 +53,8 @@ export default function LookAheadEditor() {
 
   // Cell refs for keyboard navigation
   const cellRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const filteredLinesRef = useRef<LookaheadLineData[]>([]);
+  const datesRef = useRef<string[]>([]);
 
   const handleRegisterRef = useCallback((key: string, el: HTMLButtonElement | null) => {
     if (el) {
@@ -63,10 +65,9 @@ export default function LookAheadEditor() {
   }, []);
 
   const handleCellNavigate = useCallback((cellKey: string, direction: "up" | "down" | "left" | "right") => {
-    // cellKey format: `${lineId}-${date}`
     const parts = cellKey.split("-");
-    const date = parts.slice(-3).join("-"); // yyyy-MM-dd
-    const lineId = parts.slice(0, -3).join("-"); // uuid may contain dashes
+    const date = parts.slice(-3).join("-");
+    const lineId = parts.slice(0, -3).join("-");
 
     const lineIds = filteredLinesRef.current.map((l) => l.id);
     const lineIdx = lineIds.indexOf(lineId);
