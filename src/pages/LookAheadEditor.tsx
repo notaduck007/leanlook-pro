@@ -946,16 +946,161 @@ export default function LookAheadEditor() {
         </div>
       </div>
 
+      {/* Empty State Cards */}
+      {lines.length === 0 && !filter && !isReadOnly && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => {
+              const pullBtn = document.querySelector('[data-pull-tasks-trigger]') as HTMLButtonElement;
+              pullBtn?.click();
+            }}
+            className="rounded-lg border bg-card p-6 text-left hover:border-primary/50 hover:bg-accent/30 transition-colors"
+          >
+            <Download className="h-6 w-6 mb-3 text-primary" />
+            <h3 className="font-semibold mb-1">Pull Tasks from Schedule</h3>
+            <p className="text-sm text-muted-foreground">Import tasks from your master schedule into this look-ahead.</p>
+          </button>
+          <button
+            onClick={handlePullFromLastWeek}
+            className="rounded-lg border bg-card p-6 text-left hover:border-primary/50 hover:bg-accent/30 transition-colors"
+          >
+            <Copy className="h-6 w-6 mb-3 text-primary" />
+            <h3 className="font-semibold mb-1">Carry Over from Last Week</h3>
+            <p className="text-sm text-muted-foreground">Pull incomplete tasks from the previous look-ahead.</p>
+          </button>
+          <button
+            onClick={handleAddCustomLine}
+            className="rounded-lg border bg-card p-6 text-left hover:border-primary/50 hover:bg-accent/30 transition-colors"
+          >
+            <Plus className="h-6 w-6 mb-3 text-primary" />
+            <h3 className="font-semibold mb-1">Add Custom Task</h3>
+            <p className="text-sm text-muted-foreground">Manually create a new task line for this look-ahead.</p>
+          </button>
+        </div>
+      )}
+
       {/* Mobile Card View */}
       {isMobile ? (
-        <div className="space-y-3">
-          {filteredLines.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">
-              {filter ? "No matching tasks." : "No tasks yet. Use the menu to add tasks."}
-            </div>
-          ) : (
-            filteredLines.map((line) => (
-              <MobileTaskCard
+        (filteredLines.length > 0 || filter) && (
+          <div className="space-y-3">
+            {filteredLines.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">
+                No matching tasks.
+              </div>
+            ) : (
+              filteredLines.map((line) => (
+                <MobileTaskCard
+                  key={line.id}
+                  line={line}
+                  dates={dates}
+                  onStatusChange={handleStatusChange}
+                  onFieldChange={handleFieldChange}
+                  onDeleteLine={handleDeleteLine}
+                  onNameChange={handleNameChange}
+                  readOnly={isReadOnly}
+                />
+              ))
+            )}
+          </div>
+        )
+      ) : (
+        /* Desktop/Tablet Table View */
+        (filteredLines.length > 0 || filter || lines.length > 0) && (
+          <div className="border rounded-lg overflow-auto bg-card">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <table className="w-full text-sm border-collapse">
+                <thead className="bg-muted/50 sticky top-0 z-20">
+                  <tr>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
+                      Task
+                    </th>
+                    <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
+                    {dates.map((date) => {
+                      const d = parseISO(date);
+                      const isWeekend = [0, 6].includes(d.getDay());
+                      return (
+                        <th
+                          key={date}
+                          className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
+                            isWeekend ? "bg-muted/80" : ""
+                          }`}
+                        >
+                          <div>{format(d, "EEE")}</div>
+                          <div>{format(d, "M/d")}</div>
+                        </th>
+                      );
+                    })}
+                    <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
+                    <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
+                    <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
+                  </tr>
+                  {/* Per-day PPC indicator row */}
+                  {ppcStats.planned > 0 && (
+                    <tr className="bg-muted/30">
+                      <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
+                        Daily PPC
+                      </th>
+                      {dates.map((date) => {
+                        const day = ppcStats.perDay[date];
+                        let dotClass = "bg-muted-foreground/20";
+                        if (day && day.total > 0) {
+                          const ratio = day.completed / day.total;
+                          if (ratio >= 1) dotClass = "bg-green-500";
+                          else if (ratio > 0) dotClass = "bg-yellow-500";
+                          else dotClass = "bg-red-500";
+                        }
+                        return (
+                          <th key={date} className="py-0.5 px-0.5 text-center">
+                            <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
+                          </th>
+                        );
+                      })}
+                      <th colSpan={3}></th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody>
+                  {filteredLines.length === 0 ? (
+                    <tr>
+                      <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
+                        No matching tasks.
+                      </td>
+                    </tr>
+                  ) : (
+                    <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                      {filteredLines.map((line) => (
+                        <LookaheadRow
+                          key={line.id}
+                          line={line}
+                          dates={dates}
+                          onStatusChange={handleStatusChange}
+                          onFieldChange={handleFieldChange}
+                          onDeleteLine={handleDeleteLine}
+                          onNameChange={handleNameChange}
+                          readOnly={isReadOnly}
+                          onRegisterRef={handleRegisterRef}
+                          onNavigate={handleCellNavigate}
+                          comparisonData={showComparison ? comparisonData : undefined}
+                        />
+                      ))}
+                    </SortableContext>
+                  )}
+                </tbody>
+              </table>
+            </DndContext>
+
+            {/* Quick add row button */}
+            {!isReadOnly && (
+              <button
+                onClick={handleAddCustomLine}
+                className="flex items-center gap-1.5 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors border-t"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add task...
+              </button>
+            )}
+          </div>
+        )
+      )}
                 key={line.id}
                 line={line}
                 dates={dates}
