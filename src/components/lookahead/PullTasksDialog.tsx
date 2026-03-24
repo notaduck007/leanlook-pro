@@ -37,6 +37,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   const [tasks, setTasks] = useState<TaskPreview[]>([]);
   const [loading, setLoading] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleExpand = (id: string) => {
@@ -125,6 +126,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     setExpandedIds(expanded);
 
     setTasks(topLevel);
+    setSearched(true);
     setLoading(false);
   };
 
@@ -331,6 +333,12 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           <p className="text-xs text-muted-foreground">
             Searching {format(subDays(startDate, 14), "MMM d")} — {format(addDays(endDate, 14), "MMM d, yyyy")} (including ±2 week buffer)
           </p>
+        )}
+
+        {searched && tasks.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground text-sm border rounded-md mt-2">
+            No tasks found in the selected date range. Your schedule data may use different dates.
+          </div>
         )}
 
         {tasks.length > 0 && (
