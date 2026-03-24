@@ -665,6 +665,32 @@ export default function LookAheadEditor() {
   filteredLinesRef.current = filteredLines;
   datesRef.current = dates;
 
+  // PPC calculation
+  const ppcStats = (() => {
+    let completed = 0;
+    let planned = 0;
+    const perDay: Record<string, { completed: number; total: number }> = {};
+
+    dates.forEach((d) => { perDay[d] = { completed: 0, total: 0 }; });
+
+    lines.forEach((l) => {
+      dates.forEach((d) => {
+        const s = l.status_per_day[d] as DayStatus;
+        if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
+          planned++;
+          perDay[d].total++;
+          if (s === "Y") {
+            completed++;
+            perDay[d].completed++;
+          }
+        }
+      });
+    });
+
+    const ppc = planned > 0 ? Math.round((completed / planned) * 100) : null;
+    return { completed, planned, ppc, perDay };
+  })();
+
   const renderSaveStatus = () => {
     if (saveStatus === "saving") {
       return (
