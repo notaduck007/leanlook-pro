@@ -112,6 +112,9 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                 {line.task_name || line.custom_text || "—"}
               </span>
             )}
+            {comparisonData && (
+              <ComparisonIndicator lineTaskId={line.task_id} lineCustomText={line.custom_text} comparisonData={comparisonData} />
+            )}
           </div>
         </td>
 
