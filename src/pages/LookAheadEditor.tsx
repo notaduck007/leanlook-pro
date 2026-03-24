@@ -6,11 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search } from "lucide-react";
-import { format, addDays, parseISO, subWeeks, isWithinInterval, isBefore, isAfter } from "date-fns";
+import { format, addDays, parseISO, subWeeks, isBefore, isAfter } from "date-fns";
 import { LookaheadRow, LookaheadLineData } from "@/components/lookahead/LookaheadRow";
 import { StatusLegend } from "@/components/lookahead/StatusLegend";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
+import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
 
 export default function LookAheadEditor() {
   const { id: projectId, lookaheadId } = useParams<{ id: string; lookaheadId: string }>();
@@ -31,6 +46,11 @@ export default function LookAheadEditor() {
   const isAdmin = roles.includes("admin");
   const isPM = roles.includes("pm");
   const canReview = isAdmin || isPM;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const dates: string[] = lookAhead
     ? Array.from({ length: 14 }, (_, i) =>
@@ -113,10 +133,47 @@ export default function LookAheadEditor() {
     scheduleSave();
   };
 
+  const handleNameChange = async (lineId: string, newName: string) => {
+    const line = lines.find((l) => l.id === lineId);
+    if (!line) return;
+
+    // Update local state
+    setLines((prev) =>
+      prev.map((l) => l.id === lineId ? { ...l, task_name: newName, custom_text: newName } : l)
+    );
+
+    // Persist: update custom_text on lookahead_lines
+    await supabase.from("lookahead_lines").update({ custom_text: newName }).eq("id", lineId);
+
+    // If linked to a master task, update that too
+    if (line.task_id) {
+      await supabase.from("tasks").update({ name: newName }).eq("id", line.task_id);
+    }
+
+    scheduleSave();
+  };
+
   const handleDeleteLine = async (lineId: string) => {
     await supabase.from("lookahead_lines").delete().eq("id", lineId);
     setLines((prev) => prev.filter((l) => l.id !== lineId));
     toast({ title: "Row deleted" });
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = lines.findIndex((l) => l.id === active.id);
+    const newIndex = lines.findIndex((l) => l.id === over.id);
+
+    const reordered = arrayMove(lines, oldIndex, newIndex).map((l, i) => ({ ...l, sort_order: i }));
+    setLines(reordered);
+
+    // Persist sort orders
+    const updates = reordered.map((l) =>
+      supabase.from("lookahead_lines").update({ sort_order: l.sort_order }).eq("id", l.id)
+    );
+    await Promise.all(updates);
   };
 
   const saveDraft = async () => {
@@ -130,6 +187,7 @@ export default function LookAheadEditor() {
           assigned_trade: l.assigned_trade,
           materials_needed: l.materials_needed,
           constraints: l.constraints,
+          custom_text: l.custom_text,
         })
         .eq("id", l.id)
     );
@@ -157,7 +215,6 @@ export default function LookAheadEditor() {
       .update({ status: "submitted" })
       .eq("id", lookaheadId!);
 
-    // Notify admins/PMs
     if (profile?.company_id) {
       const { data: adminRoles } = await supabase
         .from("user_roles")
@@ -231,11 +288,9 @@ export default function LookAheadEditor() {
     if (!lookAhead || !projectId || !profile?.company_id) return;
 
     const weekStart = parseISO(lookAhead.week_start_date);
-    const weekEnd = addDays(weekStart, 13); // 14-day window
-    const weekStartStr = format(weekStart, "yyyy-MM-dd");
+    const weekEnd = addDays(weekStart, 13);
     const weekEndStr = format(weekEnd, "yyyy-MM-dd");
 
-    // 1. Get latest schedule version for this project
     const { data: versions } = await supabase
       .from("schedule_versions")
       .select("id")
@@ -248,7 +303,6 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // 2. Fetch all tasks that overlap the 2-week window
     const { data: allTasks } = await supabase
       .from("tasks")
       .select("*")
@@ -259,13 +313,11 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // Filter to tasks that overlap the look-ahead window
     const overlappingTasks = allTasks.filter((t) => {
       if (!t.start_date && !t.finish_date) return false;
       const taskStart = t.start_date ? parseISO(t.start_date) : null;
       const taskEnd = t.finish_date ? parseISO(t.finish_date) : taskStart;
       if (!taskStart && !taskEnd) return false;
-      // Task overlaps if it starts before window ends AND finishes after window starts
       const startsBeforeEnd = taskStart ? !isAfter(taskStart, weekEnd) : true;
       const endsAfterStart = taskEnd ? !isBefore(taskEnd, weekStart) : true;
       return startsBeforeEnd && endsAfterStart;
@@ -276,11 +328,9 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // 3. Find which tasks already have lines
     const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
     const newTasks = overlappingTasks.filter((t) => !existingTaskIds.has(t.id));
 
-    // 4. Fetch task templates for auto-filling materials/constraints
     const { data: templates } = await supabase
       .from("task_templates")
       .select("*")
@@ -289,7 +339,6 @@ export default function LookAheadEditor() {
     const templateMap = new Map<string, any>();
     (templates || []).forEach((t) => templateMap.set(t.tag.toLowerCase(), t));
 
-    // 5. Insert new lookahead_lines for missing tasks
     let addedCount = 0;
     if (newTasks.length > 0) {
       const maxSort = lines.reduce((max, l) => Math.max(max, l.sort_order), 0);
@@ -301,10 +350,8 @@ export default function LookAheadEditor() {
           const tmpl = templateMap.get(tag.toLowerCase());
           if (tmpl) {
             const items = (tmpl.checklist_items as any[]) || [];
-            const matItems = items.filter((c: any) => c.type === "material").map((c: any) => c.text);
-            const conItems = items.filter((c: any) => c.type === "constraint").map((c: any) => c.text);
-            if (matItems.length) materials = matItems.join(", ");
-            if (conItems.length) constraints = conItems.join(", ");
+            materials = items.filter((c: any) => c.type === "material").map((c: any) => c.text).join(", ") || null;
+            constraints = items.filter((c: any) => c.type === "constraint").map((c: any) => c.text).join(", ") || null;
             break;
           }
         }
@@ -329,7 +376,6 @@ export default function LookAheadEditor() {
         console.error("Error inserting lines:", error);
       } else if (inserted) {
         addedCount = inserted.length;
-        // Map inserted lines to LookaheadLineData
         const taskMap = overlappingTasks.reduce((acc, t) => ({ ...acc, [t.id]: t }), {} as Record<string, any>);
         const newMappedLines: LookaheadLineData[] = inserted.map((l) => ({
           id: l.id,
@@ -348,7 +394,6 @@ export default function LookAheadEditor() {
       }
     }
 
-    // 5. Build a task lookup for date-aware filling
     const taskDateMap: Record<string, { start: Date | null; end: Date | null }> = {};
     for (const t of overlappingTasks) {
       taskDateMap[t.id] = {
@@ -357,7 +402,6 @@ export default function LookAheadEditor() {
       };
     }
 
-    // 6. Fill "planned" only on days within each task's actual schedule dates
     let filled = 0;
     setLines((prev) =>
       prev.map((l) => {
@@ -365,10 +409,8 @@ export default function LookAheadEditor() {
         const taskDates = l.task_id ? taskDateMap[l.task_id] : null;
 
         dates.forEach((date) => {
-          if (newStatus[date]) return; // Don't overwrite existing status
-
+          if (newStatus[date]) return;
           if (taskDates) {
-            // Only mark planned if this date falls within task's schedule
             const d = parseISO(date);
             const afterStart = taskDates.start ? !isBefore(d, taskDates.start) : true;
             const beforeEnd = taskDates.end ? !isAfter(d, taskDates.end) : true;
@@ -377,7 +419,6 @@ export default function LookAheadEditor() {
               filled++;
             }
           }
-          // Custom lines (no task_id) — don't auto-fill, user manages manually
         });
 
         return { ...l, status_per_day: newStatus };
@@ -394,8 +435,6 @@ export default function LookAheadEditor() {
   const handlePullFromLastWeek = async () => {
     if (!projectId || !lookaheadId || !profile?.company_id || !lookAhead) return;
 
-    // Find the previous look-ahead
-    const prevWeekStart = format(subWeeks(parseISO(lookAhead.week_start_date), 2), "yyyy-MM-dd");
     const { data: prevLAs } = await supabase
       .from("look_aheads")
       .select("id")
@@ -409,7 +448,6 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // Get incomplete lines from the previous look-ahead
     const { data: prevLines } = await supabase
       .from("lookahead_lines")
       .select("*")
@@ -420,7 +458,6 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // Filter to lines that had N or incomplete status on last days
     const incompleteLines = prevLines.filter((pl) => {
       const statuses = Object.values((pl.status_per_day as Record<string, string>) || {});
       return statuses.includes("N") || statuses.includes("planned") || statuses.includes("progress");
@@ -431,7 +468,6 @@ export default function LookAheadEditor() {
       return;
     }
 
-    // Get task names
     const taskIds = incompleteLines.filter((l) => l.task_id).map((l) => l.task_id!);
     let taskMap: Record<string, any> = {};
     if (taskIds.length > 0) {
@@ -439,7 +475,6 @@ export default function LookAheadEditor() {
       taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
     }
 
-    // Check for existing task_ids to avoid duplicates
     const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
     const newLines = incompleteLines.filter((l) => !l.task_id || !existingTaskIds.has(l.task_id));
 
@@ -494,7 +529,6 @@ export default function LookAheadEditor() {
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
   const isRejected = lookAhead?.status === "rejected";
 
-  // Filter lines
   const filteredLines = filter
     ? lines.filter(
         (l) =>
@@ -502,6 +536,8 @@ export default function LookAheadEditor() {
           (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase())
       )
     : lines;
+
+  const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
   return (
     <div className="space-y-4">
@@ -520,7 +556,6 @@ export default function LookAheadEditor() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Review actions for PM/Admin on submitted look-aheads */}
           {canReview && lookAhead?.status === "submitted" && (
             <>
               <Button size="sm" variant="outline" className="text-green-600 border-green-300 hover:bg-green-50" onClick={handleApprove}>
@@ -531,9 +566,16 @@ export default function LookAheadEditor() {
               </Button>
             </>
           )}
-          {/* Edit actions for the owner when not submitted/approved */}
           {isOwner && (lookAhead?.status === "draft" || isRejected) && (
             <>
+              <PullTasksDialog
+                projectId={projectId!}
+                lookaheadId={lookaheadId!}
+                companyId={profile?.company_id || ""}
+                existingTaskIds={existingTaskIds}
+                dates={dates}
+                onTasksPulled={fetchData}
+              />
               <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
                 <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
               </Button>
@@ -573,55 +615,60 @@ export default function LookAheadEditor() {
 
       {/* Table */}
       <div className="border rounded-lg overflow-auto bg-card">
-        <table className="w-full text-sm border-collapse">
-          <thead className="bg-muted/50 sticky top-0 z-20">
-            <tr>
-              <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
-                Task
-              </th>
-              <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
-              {dates.map((date) => {
-                const d = parseISO(date);
-                const isWeekend = [0, 6].includes(d.getDay());
-                return (
-                  <th
-                    key={date}
-                    className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
-                      isWeekend ? "bg-muted/80" : ""
-                    }`}
-                  >
-                    <div>{format(d, "EEE")}</div>
-                    <div>{format(d, "M/d")}</div>
-                  </th>
-                );
-              })}
-              <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
-              <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
-              <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredLines.length === 0 ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-muted/50 sticky top-0 z-20">
               <tr>
-                <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
-                  {filter ? "No matching tasks." : "No tasks yet. Add a custom line or upload a schedule first."}
-                </td>
+                <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
+                  Task
+                </th>
+                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
+                {dates.map((date) => {
+                  const d = parseISO(date);
+                  const isWeekend = [0, 6].includes(d.getDay());
+                  return (
+                    <th
+                      key={date}
+                      className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
+                        isWeekend ? "bg-muted/80" : ""
+                      }`}
+                    >
+                      <div>{format(d, "EEE")}</div>
+                      <div>{format(d, "M/d")}</div>
+                    </th>
+                  );
+                })}
+                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
+                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
+                <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
               </tr>
-            ) : (
-              filteredLines.map((line) => (
-                <LookaheadRow
-                  key={line.id}
-                  line={line}
-                  dates={dates}
-                  onStatusChange={handleStatusChange}
-                  onFieldChange={handleFieldChange}
-                  onDeleteLine={handleDeleteLine}
-                  readOnly={isReadOnly}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredLines.length === 0 ? (
+                <tr>
+                  <td colSpan={dates.length + 5} className="text-center py-8 text-muted-foreground">
+                    {filter ? "No matching tasks." : "No tasks yet. Use 'Pull Tasks' to select tasks from a custom date range, or add a custom line."}
+                  </td>
+                </tr>
+              ) : (
+                <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                  {filteredLines.map((line) => (
+                    <LookaheadRow
+                      key={line.id}
+                      line={line}
+                      dates={dates}
+                      onStatusChange={handleStatusChange}
+                      onFieldChange={handleFieldChange}
+                      onDeleteLine={handleDeleteLine}
+                      onNameChange={handleNameChange}
+                      readOnly={isReadOnly}
+                    />
+                  ))}
+                </SortableContext>
+              )}
+            </tbody>
+          </table>
+        </DndContext>
       </div>
     </div>
   );

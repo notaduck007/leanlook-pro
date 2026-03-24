@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Database, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Search, Database, ChevronDown, ChevronRight, Pencil, Check, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface MasterSubtask {
   id: string;
@@ -34,6 +35,10 @@ export default function MasterTasks() {
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [subtaskCache, setSubtaskCache] = useState<Record<string, MasterSubtask[]>>({});
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
     supabase
@@ -64,6 +69,33 @@ export default function MasterTasks() {
     setExpandedIds(next);
   };
 
+  const saveTaskName = async (taskId: string) => {
+    if (!editValue.trim()) { setEditingTaskId(null); return; }
+    const { error } = await supabase.from("master_tasks").update({ name: editValue.trim() }).eq("id", taskId);
+    if (error) {
+      toast({ title: "Failed to update", variant: "destructive" });
+    } else {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, name: editValue.trim() } : t));
+      toast({ title: "Task name updated" });
+    }
+    setEditingTaskId(null);
+  };
+
+  const saveSubtaskName = async (subtaskId: string, masterTaskId: string) => {
+    if (!editValue.trim()) { setEditingSubtaskId(null); return; }
+    const { error } = await supabase.from("master_subtasks").update({ name: editValue.trim() }).eq("id", subtaskId);
+    if (error) {
+      toast({ title: "Failed to update", variant: "destructive" });
+    } else {
+      setSubtaskCache(prev => ({
+        ...prev,
+        [masterTaskId]: (prev[masterTaskId] || []).map(st => st.id === subtaskId ? { ...st, name: editValue.trim() } : st),
+      }));
+      toast({ title: "Subtask name updated" });
+    }
+    setEditingSubtaskId(null);
+  };
+
   const filtered = tasks.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     (t.tags || []).some(tag => tag.toLowerCase().includes(search.toLowerCase()))
@@ -85,7 +117,7 @@ export default function MasterTasks() {
             <Database className="h-6 w-6" /> Master Task Repository
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Global knowledge base of {tasks.length} construction tasks with AI-generated subtasks
+            Global knowledge base of {tasks.length} construction tasks with AI-generated subtasks. Double-click any name to edit.
           </p>
         </div>
       </div>
@@ -124,7 +156,34 @@ export default function MasterTasks() {
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-sm font-medium truncate">{task.name}</CardTitle>
+                      {editingTaskId === task.id ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Input
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="h-7 text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveTaskName(task.id);
+                              if (e.key === "Escape") setEditingTaskId(null);
+                            }}
+                          />
+                          <button onClick={() => saveTaskName(task.id)} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => setEditingTaskId(null)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <CardTitle
+                          className="text-sm font-medium truncate cursor-pointer hover:underline"
+                          onDoubleClick={(e) => { e.stopPropagation(); setEditValue(task.name); setEditingTaskId(task.id); }}
+                          title="Double-click to edit"
+                        >
+                          {task.name}
+                        </CardTitle>
+                      )}
                     </div>
                     <div className="flex gap-1 flex-wrap justify-end">
                       {(task.tags || []).slice(0, 3).map(tag => (
@@ -146,8 +205,35 @@ export default function MasterTasks() {
                       (subtaskCache[task.id] || []).map((st, idx) => (
                         <div key={st.id} className="flex items-center gap-2 py-1">
                           <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
-                          <span className="text-sm flex-1">{st.name}</span>
-                          {st.category && (
+                          {editingSubtaskId === st.id ? (
+                            <div className="flex items-center gap-1 flex-1">
+                              <Input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="h-6 text-sm flex-1"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveSubtaskName(st.id, task.id);
+                                  if (e.key === "Escape") setEditingSubtaskId(null);
+                                }}
+                              />
+                              <button onClick={() => saveSubtaskName(st.id, task.id)} className="p-0.5 text-green-600 hover:bg-green-50 rounded">
+                                <Check className="h-3 w-3" />
+                              </button>
+                              <button onClick={() => setEditingSubtaskId(null)} className="p-0.5 text-red-600 hover:bg-red-50 rounded">
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              className="text-sm flex-1 cursor-pointer hover:underline"
+                              onDoubleClick={() => { setEditValue(st.name); setEditingSubtaskId(st.id); }}
+                              title="Double-click to edit"
+                            >
+                              {st.name}
+                            </span>
+                          )}
+                          {st.category && editingSubtaskId !== st.id && (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
                               {st.category}
                             </span>
