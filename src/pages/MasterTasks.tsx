@@ -1,0 +1,167 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Search, Database, ChevronDown, ChevronRight } from "lucide-react";
+
+interface MasterSubtask {
+  id: string;
+  name: string;
+  sort_order: number;
+  category: string | null;
+}
+
+interface MasterTask {
+  id: string;
+  name: string;
+  tags: string[];
+  category: string | null;
+  created_at: string;
+  subtasks?: MasterSubtask[];
+}
+
+const categoryColors: Record<string, string> = {
+  prep: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  execute: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  inspect: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  closeout: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+};
+
+export default function MasterTasks() {
+  const [tasks, setTasks] = useState<MasterTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [subtaskCache, setSubtaskCache] = useState<Record<string, MasterSubtask[]>>({});
+
+  useEffect(() => {
+    supabase
+      .from("master_tasks")
+      .select("*")
+      .order("name")
+      .then(({ data }) => {
+        setTasks((data as MasterTask[]) || []);
+        setLoading(false);
+      });
+  }, []);
+
+  const toggleExpand = async (taskId: string) => {
+    const next = new Set(expandedIds);
+    if (next.has(taskId)) {
+      next.delete(taskId);
+    } else {
+      next.add(taskId);
+      if (!subtaskCache[taskId]) {
+        const { data } = await supabase
+          .from("master_subtasks")
+          .select("*")
+          .eq("master_task_id", taskId)
+          .order("sort_order");
+        setSubtaskCache(prev => ({ ...prev, [taskId]: (data as MasterSubtask[]) || [] }));
+      }
+    }
+    setExpandedIds(next);
+  };
+
+  const filtered = tasks.filter(t =>
+    t.name.toLowerCase().includes(search.toLowerCase()) ||
+    (t.tags || []).some(tag => tag.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Database className="h-6 w-6" /> Master Task Repository
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Global knowledge base of {tasks.length} construction tasks with AI-generated subtasks
+          </p>
+        </div>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search tasks or tags..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            {tasks.length === 0
+              ? "No tasks yet. Upload a schedule to start building the repository."
+              : "No tasks match your search."}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(task => (
+            <Card key={task.id} className="overflow-hidden">
+              <button
+                onClick={() => toggleExpand(task.id)}
+                className="w-full text-left"
+              >
+                <CardHeader className="py-3 px-4">
+                  <div className="flex items-center gap-3">
+                    {expandedIds.has(task.id) ? (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-sm font-medium truncate">{task.name}</CardTitle>
+                    </div>
+                    <div className="flex gap-1 flex-wrap justify-end">
+                      {(task.tags || []).slice(0, 3).map(tag => (
+                        <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                      ))}
+                      {(task.tags || []).length > 3 && (
+                        <Badge variant="outline" className="text-xs">+{task.tags.length - 3}</Badge>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+              </button>
+              {expandedIds.has(task.id) && (
+                <CardContent className="pt-0 pb-3 px-4">
+                  <div className="ml-7 space-y-1">
+                    {(subtaskCache[task.id] || []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">Loading subtasks...</p>
+                    ) : (
+                      (subtaskCache[task.id] || []).map((st, idx) => (
+                        <div key={st.id} className="flex items-center gap-2 py-1">
+                          <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
+                          <span className="text-sm flex-1">{st.name}</span>
+                          {st.category && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
+                              {st.category}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

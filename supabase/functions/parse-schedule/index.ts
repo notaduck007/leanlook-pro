@@ -7,7 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Construction tag categories based on real schedule patterns
 const TAG_RULES: Record<string, string[]> = {
   "MEP": ["mep", "mechanical", "electrical", "plumbing", "hvac", "ahu", "chiller", "boiler", "ductwork", "piping", "conduit", "panel", "transformer", "vav", "diffuser"],
   "Structural": ["structural", "steel", "concrete", "foundation", "pier", "drilled pier", "grade beam", "slab", "footing", "rebar", "formwork", "shoring", "framing", "decking"],
@@ -40,6 +39,157 @@ function autoTag(taskName: string): string[] {
   return [...new Set(tags)];
 }
 
+function normalizeTaskName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+async function populateMasterRepository(
+  supabase: any,
+  tasks: Array<{ name: string; tags: string[] }>,
+  apiKey: string
+) {
+  // Get existing master tasks to avoid duplicates
+  const normalizedNames = tasks.map(t => normalizeTaskName(t.name));
+  const { data: existing } = await supabase
+    .from("master_tasks")
+    .select("normalized_name")
+    .in("normalized_name", normalizedNames);
+
+  const existingSet = new Set((existing || []).map((e: any) => e.normalized_name));
+  const newTasks = tasks.filter(t => !existingSet.has(normalizeTaskName(t.name)));
+
+  if (newTasks.length === 0) {
+    console.log("All tasks already in master repository");
+    return;
+  }
+
+  // Batch new tasks (max 20 at a time for AI analysis)
+  const batchSize = 20;
+  for (let i = 0; i < newTasks.length; i += batchSize) {
+    const batch = newTasks.slice(i, i + batchSize);
+    const taskList = batch.map(t => t.name).join("\n- ");
+
+    try {
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content: `You are a construction project management expert. For each construction task, generate 3-8 required subtasks that a superintendent needs to complete. Categorize each subtask as: prep (preparation/procurement), execute (actual work), inspect (quality check/verification), or closeout (cleanup/documentation). Be specific and practical.`,
+            },
+            {
+              role: "user",
+              content: `Generate required subtasks for these construction tasks:\n- ${taskList}`,
+            },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "save_subtasks",
+                description: "Save subtasks for construction tasks",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    tasks: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          task_name: { type: "string" },
+                          category: { type: "string" },
+                          subtasks: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                name: { type: "string" },
+                                category: { type: "string", enum: ["prep", "execute", "inspect", "closeout"] },
+                              },
+                              required: ["name", "category"],
+                            },
+                          },
+                        },
+                        required: ["task_name", "subtasks"],
+                      },
+                    },
+                  },
+                  required: ["tasks"],
+                },
+              },
+            },
+          ],
+          tool_choice: { type: "function", function: { name: "save_subtasks" } },
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        console.error("AI subtask generation error:", aiResponse.status);
+        continue;
+      }
+
+      const aiResult = await aiResponse.json();
+      const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
+      if (!toolCall) continue;
+
+      const parsed = JSON.parse(toolCall.function.arguments);
+      const aiTasks = parsed.tasks || [];
+
+      for (const aiTask of aiTasks) {
+        const matchedOriginal = batch.find(
+          b => normalizeTaskName(b.name) === normalizeTaskName(aiTask.task_name) ||
+               aiTask.task_name.toLowerCase().includes(normalizeTaskName(b.name)) ||
+               normalizeTaskName(b.name).includes(normalizeTaskName(aiTask.task_name))
+        );
+        const originalName = matchedOriginal?.name || aiTask.task_name;
+        const originalTags = matchedOriginal?.tags || autoTag(aiTask.task_name);
+        const normalized = normalizeTaskName(originalName);
+
+        if (existingSet.has(normalized)) continue;
+
+        const { data: masterTask, error: mtError } = await supabase
+          .from("master_tasks")
+          .insert({
+            name: originalName,
+            normalized_name: normalized,
+            tags: originalTags,
+            category: aiTask.category || originalTags[0] || null,
+          })
+          .select("id")
+          .single();
+
+        if (mtError) {
+          // Likely a duplicate from concurrent insert — skip
+          console.log("Master task insert skipped (likely duplicate):", normalized);
+          existingSet.add(normalized);
+          continue;
+        }
+
+        existingSet.add(normalized);
+
+        const subtaskInserts = (aiTask.subtasks || []).map((st: any, idx: number) => ({
+          master_task_id: masterTask.id,
+          name: st.name,
+          sort_order: idx,
+          category: st.category || "execute",
+        }));
+
+        if (subtaskInserts.length > 0) {
+          await supabase.from("master_subtasks").insert(subtaskInserts);
+        }
+      }
+    } catch (err) {
+      console.error("Master repository batch error:", err);
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -68,11 +218,9 @@ serve(async (req) => {
     if (fileName.endsWith(".csv")) {
       fileContent = await fileData.text();
     } else if (fileName.endsWith(".mpp") || fileName.endsWith(".mpt")) {
-      // MPP files are binary - send raw bytes as base64 for AI vision analysis
       isMpp = true;
       const buffer = await fileData.arrayBuffer();
       const bytes = new Uint8Array(buffer);
-      // Extract readable text strings from the binary MPP (UTF-16LE encoded task names)
       const strings: string[] = [];
       for (let i = 0; i < bytes.length - 1; i++) {
         const chars: string[] = [];
@@ -85,11 +233,10 @@ serve(async (req) => {
         }
         if (chars.length >= 4) strings.push(chars.join(""));
       }
-      // Deduplicate and filter task-like strings
-      const unique = [...new Set(strings)].filter(s => 
-        s.length >= 4 && 
-        !s.match(/^[A-F0-9]+$/i) && // skip hex strings
-        !s.match(/^\d+$/) && // skip pure numbers
+      const unique = [...new Set(strings)].filter(s =>
+        s.length >= 4 &&
+        !s.match(/^[A-F0-9]+$/i) &&
+        !s.match(/^\d+$/) &&
         !s.startsWith("Microsoft") &&
         !s.startsWith("Windows") &&
         !s.includes("\\")
@@ -100,7 +247,6 @@ serve(async (req) => {
       const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 50000)));
       fileContent = `[Excel file base64 preview - first 50KB]: ${base64}`;
     } else {
-      // PDF - send as base64 for vision
       const buffer = await fileData.arrayBuffer();
       const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 100000)));
       fileContent = `[PDF file base64 - first 100KB]: ${base64}`;
@@ -220,7 +366,7 @@ Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.
       };
     });
 
-    // Insert in batches of 50 to avoid payload limits
+    // Insert tasks in batches
     const batchSize = 50;
     for (let i = 0; i < taskInserts.length; i += batchSize) {
       const batch = taskInserts.slice(i, i + batchSize);
@@ -230,6 +376,13 @@ Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.
         throw insertError;
       }
     }
+
+    // Populate master task repository in background (don't block response)
+    const masterTasks = taskInserts.map((t: any) => ({ name: t.name, tags: t.tags }));
+    // Fire and forget — populate master repository asynchronously
+    populateMasterRepository(supabase, masterTasks, LOVABLE_API_KEY).catch(err =>
+      console.error("Master repository population error:", err)
+    );
 
     return new Response(
       JSON.stringify({ success: true, task_count: taskInserts.length }),
