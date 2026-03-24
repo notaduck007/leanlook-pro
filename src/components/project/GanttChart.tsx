@@ -58,18 +58,18 @@ export function GanttChart({ tasks }: GanttChartProps) {
   }
 
   return (
-    <div className="w-full overflow-hidden">
-      <ScrollArea className="w-full">
-        <div className="flex" style={{ width: 200 + chartWidth }}>
+    <div className="w-full overflow-x-auto border rounded-md">
+      <div style={{ minWidth: 200 + chartWidth }}>
+        <div className="flex">
           {/* Task names column */}
-          <div className="shrink-0 w-[200px] border-r bg-card z-10">
+          <div className="shrink-0 w-[200px] border-r bg-card sticky left-0 z-10">
             <div className="h-10 border-b flex items-center px-3 text-xs font-medium text-muted-foreground bg-muted/50">
               Task
             </div>
             {validTasks.slice(0, 30).map((task) => (
               <div
                 key={task.id}
-                className="flex items-center px-3 border-b text-xs truncate"
+                className="flex items-center px-3 border-b text-xs truncate bg-card"
                 style={{ height: rowHeight }}
               >
                 {task.name}
@@ -78,7 +78,7 @@ export function GanttChart({ tasks }: GanttChartProps) {
           </div>
 
           {/* Chart area */}
-          <div style={{ width: chartWidth, minWidth: chartWidth }}>
+          <div className="flex-1">
             {/* Month headers */}
             <div className="flex h-10 border-b bg-muted/50">
               {months.map((m) => (
@@ -122,8 +122,7 @@ export function GanttChart({ tasks }: GanttChartProps) {
             })}
           </div>
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </div>
     </div>
   );
 }
