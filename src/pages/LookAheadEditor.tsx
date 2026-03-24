@@ -660,6 +660,10 @@ export default function LookAheadEditor() {
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
+  // Keep refs in sync for keyboard navigation
+  filteredLinesRef.current = filteredLines;
+  datesRef.current = dates;
+
   const renderSaveStatus = () => {
     if (saveStatus === "saving") {
       return (
