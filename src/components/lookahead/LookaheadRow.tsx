@@ -30,9 +30,11 @@ interface LookaheadRowProps {
   onDeleteLine?: (lineId: string) => void;
   onNameChange?: (lineId: string, newName: string) => void;
   readOnly?: boolean;
+  onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
+  onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly, onRegisterRef, onNavigate }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");
@@ -122,6 +124,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         {/* Daily Status Cells */}
         {dates.map((date) => {
           const isWeekend = [0, 6].includes(new Date(date + "T00:00:00").getDay());
+          const cellKey = `${line.id}-${date}`;
           return (
             <td key={date} className="py-1 px-0.5 text-center">
               <StatusCell
@@ -129,6 +132,9 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                 onChange={(s) => onStatusChange(line.id, date, s)}
                 isWeekend={isWeekend}
                 readOnly={readOnly}
+                cellKey={cellKey}
+                onRegisterRef={onRegisterRef}
+                onNavigate={onNavigate}
               />
             </td>
           );
@@ -200,6 +206,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onDeleteLine={onDeleteLine}
           onNameChange={onNameChange}
           readOnly={readOnly}
+          onRegisterRef={onRegisterRef}
+          onNavigate={onNavigate}
         />
       ))}
     </>

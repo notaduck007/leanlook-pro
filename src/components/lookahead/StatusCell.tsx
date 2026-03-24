@@ -1,30 +1,99 @@
+import { useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 export type DayStatus = "Y" | "N" | "50" | "planned" | "progress" | "";
 
 const STATUS_CYCLE: DayStatus[] = ["", "planned", "Y", "N", "50", "progress"];
 
+const KEY_STATUS_MAP: Record<string, DayStatus> = {
+  y: "Y",
+  n: "N",
+  p: "planned",
+  "5": "50",
+  i: "progress",
+};
+
 interface StatusCellProps {
   status: DayStatus;
   onChange: (status: DayStatus) => void;
   isWeekend?: boolean;
   readOnly?: boolean;
+  cellKey?: string;
+  onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
+  onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
 }
 
-export function StatusCell({ status, onChange, isWeekend, readOnly }: StatusCellProps) {
+export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate }: StatusCellProps) {
+  const refCallback = useCallback(
+    (el: HTMLButtonElement | null) => {
+      if (cellKey && onRegisterRef) onRegisterRef(cellKey, el);
+    },
+    [cellKey, onRegisterRef]
+  );
+
   const handleClick = () => {
     if (readOnly) return;
     const idx = STATUS_CYCLE.indexOf(status);
     onChange(STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (readOnly) return;
+
+    // Arrow navigation
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      e.preventDefault();
+      const dirMap: Record<string, "up" | "down" | "left" | "right"> = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+      };
+      if (cellKey && onNavigate) onNavigate(cellKey, dirMap[e.key]);
+      return;
+    }
+
+    // Space/Enter cycle
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      const idx = STATUS_CYCLE.indexOf(status);
+      onChange(STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]);
+      return;
+    }
+
+    // Direct status keys
+    const lower = e.key.toLowerCase();
+    if (lower in KEY_STATUS_MAP) {
+      e.preventDefault();
+      onChange(KEY_STATUS_MAP[lower]);
+      return;
+    }
+
+    // Clear
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      onChange("");
+      return;
+    }
+
+    // Escape
+    if (e.key === "Escape") {
+      e.preventDefault();
+      (e.target as HTMLButtonElement).blur();
+    }
+  };
+
   return (
     <button
+      ref={refCallback}
       type="button"
+      tabIndex={readOnly ? -1 : 0}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       disabled={readOnly}
       className={cn(
         "w-8 h-8 flex items-center justify-center rounded border text-xs font-bold transition-colors select-none",
+        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
         isWeekend && "bg-muted/50",
         !readOnly && "hover:bg-accent cursor-pointer",
         readOnly && "cursor-default",
