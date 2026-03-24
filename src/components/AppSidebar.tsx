@@ -18,16 +18,37 @@ import {
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Projects", url: "/projects", icon: FolderKanban },
-  { title: "Look-Aheads", url: "/lookaheads", icon: CalendarDays },
-  { title: "Master Tasks", url: "/master-tasks", icon: Database },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
+  { title: "Projects", url: "/projects", icon: FolderKanban, exact: false },
+  { title: "Look-Aheads", url: "/lookaheads", icon: CalendarDays, exact: true, alsoActiveFor: ["/projects/*/lookahead/"] },
+  { title: "Master Tasks", url: "/master-tasks", icon: Database, exact: true },
 ];
 
 const adminItems = [
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Analytics", url: "/analytics", icon: BarChart3, exact: true },
+  { title: "Settings", url: "/settings", icon: Settings, exact: true },
 ];
+
+function checkActive(pathname: string, item: typeof navItems[0]): boolean {
+  if (item.exact) {
+    if (pathname === item.url) return true;
+  } else {
+    if (pathname === item.url || pathname.startsWith(item.url + "/")) return true;
+  }
+  // Check alsoActiveFor patterns
+  if ((item as any).alsoActiveFor) {
+    for (const pattern of (item as any).alsoActiveFor as string[]) {
+      // Convert glob pattern to simple check
+      if (pattern.includes("*")) {
+        const parts = pattern.split("*");
+        if (parts.length === 2 && pathname.startsWith(parts[0]) && pathname.includes(parts[1])) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -57,16 +78,24 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                    <NavLink to={item.url} end className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
-                      <item.icon className="mr-2 h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navItems.map((item) => {
+                const active = checkActive(location.pathname, item);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={active}>
+                      <NavLink
+                        to={item.url}
+                        end={item.exact}
+                        className="hover:bg-sidebar-accent/50"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      >
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -76,16 +105,24 @@ export function AppSidebar() {
             <SidebarGroupLabel>Admin</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                      <NavLink to={item.url} end className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {adminItems.map((item) => {
+                  const active = checkActive(location.pathname, item);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={active}>
+                        <NavLink
+                          to={item.url}
+                          end={item.exact}
+                          className="hover:bg-sidebar-accent/50"
+                          activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                        >
+                          <item.icon className="mr-2 h-4 w-4" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
