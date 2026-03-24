@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,8 +12,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center justify-between border-b px-4 bg-card">
-            <SidebarTrigger className="mr-4" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <SidebarTrigger className="shrink-0" />
+              <Breadcrumbs />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <ThemeToggle />
               <NotificationBell />
             </div>
