@@ -246,10 +246,21 @@ export default function MasterTasks() {
                               {st.name}
                             </span>
                           )}
-                          {st.category && editingSubtaskId !== st.id && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
-                              {st.category}
-                            </span>
+                          {editingSubtaskId !== st.id && (
+                            <div className="flex items-center gap-1">
+                              {st.category && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
+                                  {st.category}
+                                </span>
+                              )}
+                              <button
+                                onClick={() => deleteSubtask(st.id, task.id)}
+                                className="p-0.5 text-muted-foreground hover:text-destructive rounded hover:bg-destructive/10 transition-colors opacity-0 group-hover/subtask:opacity-100"
+                                title="Delete subtask"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))
