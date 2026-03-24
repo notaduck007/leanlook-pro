@@ -219,6 +219,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
+          comparisonData={comparisonData}
         />
       ))}
     </>
