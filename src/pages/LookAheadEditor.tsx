@@ -333,8 +333,10 @@ export default function LookAheadEditor() {
   };
 
   const handleDeleteLine = async (lineId: string) => {
+    // Also delete child lines (cascade handles DB, but clean local state)
+    const childIds = lines.filter((l) => l.parent_line_id === lineId).map((l) => l.id);
     await supabase.from("lookahead_lines").delete().eq("id", lineId);
-    setLines((prev) => prev.filter((l) => l.id !== lineId));
+    setLines((prev) => prev.filter((l) => l.id !== lineId && l.parent_line_id !== lineId));
     toast({ title: "Row deleted" });
   };
 
