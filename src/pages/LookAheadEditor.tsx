@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -777,24 +777,12 @@ export default function LookAheadEditor() {
     }
   }, [showComparison, projectId, lookAhead?.week_start_date, lines, toast]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const isOwner = lookAhead?.super_id === user?.id;
-  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
-  const isRejected = lookAhead?.status === "rejected";
-
-  // Build hierarchical lines: group subtasks under their parents
-  const buildHierarchicalLines = (flatLines: LookaheadLineData[]): LookaheadLineData[] => {
+  // Build hierarchical lines: group subtasks under their parents (memoized to prevent layout jumps)
+  const hierarchicalLines = useMemo(() => {
     const parentLines: LookaheadLineData[] = [];
     const childrenByParent = new Map<string, LookaheadLineData[]>();
 
-    flatLines.forEach((l) => {
+    lines.forEach((l) => {
       if (l.parent_line_id) {
         const existing = childrenByParent.get(l.parent_line_id) || [];
         existing.push({ ...l, depth: 1 });
@@ -810,20 +798,37 @@ export default function LookAheadEditor() {
       children: childrenByParent.get(p.id) || [],
       depth: 0,
     }));
-  };
+  }, [lines]);
 
-  const hierarchicalLines = buildHierarchicalLines(lines);
+  const filteredLines = useMemo(() => {
+    if (!filter) return hierarchicalLines;
+    const lowerFilter = filter.toLowerCase();
+    return hierarchicalLines.filter(
+      (l) =>
+        l.task_name.toLowerCase().includes(lowerFilter) ||
+        (l.assigned_trade || "").toLowerCase().includes(lowerFilter) ||
+        (l.children || []).some(
+          (c) => c.task_name.toLowerCase().includes(lowerFilter)
+        )
+    );
+  }, [hierarchicalLines, filter]);
 
-  const filteredLines = filter
-    ? hierarchicalLines.filter(
-        (l) =>
-          l.task_name.toLowerCase().includes(filter.toLowerCase()) ||
-          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase()) ||
-          (l.children || []).some(
-            (c) => c.task_name.toLowerCase().includes(filter.toLowerCase())
-          )
-      )
-    : hierarchicalLines;
+  const sortableIds = useMemo(() =>
+    filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)]),
+    [filteredLines]
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const isOwner = lookAhead?.super_id === user?.id;
+  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  const isRejected = lookAhead?.status === "rejected";
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
@@ -1209,7 +1214,7 @@ export default function LookAheadEditor() {
                       </td>
                     </tr>
                   ) : (
-                    <SortableContext items={filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)])} strategy={verticalListSortingStrategy}>
+                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                       {filteredLines.map((line) => (
                         <LookaheadRow
                           key={line.id}
