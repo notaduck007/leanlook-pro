@@ -333,9 +333,43 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
     const templateMap = new Map<string, any>();
     (templates || []).forEach((t) => templateMap.set(t.tag.toLowerCase(), t));
 
-    let plannedCellCount = 0;
+    // Fetch master subtasks for all selected tasks
+    const taskNames = selected.map((t) => t.name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim());
+    const { data: masterTasks } = await supabase
+      .from("master_tasks")
+      .select("id, name, normalized_name")
+      .in("normalized_name", taskNames);
 
-    const inserts = selected.map((task, i) => {
+    const masterTaskMap = new Map<string, string>(); // normalized_name -> master_task_id
+    (masterTasks || []).forEach((mt) => masterTaskMap.set(mt.normalized_name, mt.id));
+
+    const masterTaskIds = [...new Set(masterTaskMap.values())];
+    let subtasksByMasterId = new Map<string, Array<{ name: string; category: string | null; sort_order: number }>>();
+
+    if (masterTaskIds.length > 0) {
+      const { data: subtasks } = await supabase
+        .from("master_subtasks")
+        .select("*")
+        .in("master_task_id", masterTaskIds)
+        .order("sort_order");
+
+      (subtasks || []).forEach((st) => {
+        if (!subtasksByMasterId.has(st.master_task_id)) {
+          subtasksByMasterId.set(st.master_task_id, []);
+        }
+        subtasksByMasterId.get(st.master_task_id)!.push({
+          name: st.name,
+          category: st.category,
+          sort_order: st.sort_order ?? 0,
+        });
+      });
+    }
+
+    let plannedCellCount = 0;
+    let sortOrder = 0;
+    const allInserts: any[] = [];
+
+    for (const task of selected) {
       const taskTags = task.tags || [];
       let materials: string | null = null;
       let constraints: string | null = null;
@@ -362,24 +396,50 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         }
       }
 
-      return {
+      // Insert parent task line
+      allInserts.push({
         lookahead_id: lookaheadId,
         company_id: companyId,
         task_id: task.id,
-        sort_order: i,
+        sort_order: sortOrder++,
         status_per_day: statusPerDay,
         assigned_trade: taskTags.join(", ") || null,
         materials_needed: materials,
         constraints,
-      };
-    });
+      });
 
-    await supabase.from("lookahead_lines").insert(inserts);
+      // Insert subtask lines from master repository
+      const normalized = task.name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      const masterTaskId = masterTaskMap.get(normalized);
+      if (masterTaskId) {
+        const subtasks = subtasksByMasterId.get(masterTaskId) || [];
+        for (const st of subtasks) {
+          allInserts.push({
+            lookahead_id: lookaheadId,
+            company_id: companyId,
+            task_id: null,
+            custom_text: `↳ ${st.name}`,
+            sort_order: sortOrder++,
+            status_per_day: {},
+            assigned_trade: st.category || null,
+            materials_needed: null,
+            constraints: null,
+          });
+        }
+      }
+    }
+
+    // Insert in batches of 50
+    for (let i = 0; i < allInserts.length; i += 50) {
+      await supabase.from("lookahead_lines").insert(allInserts.slice(i, i + 50));
+    }
+
+    const subtaskCount = allInserts.length - selected.length;
     setPulling(false);
     setOpen(false);
 
     toast({
-      title: `Pulled ${selected.length} tasks`,
+      title: `Pulled ${selected.length} tasks${subtaskCount > 0 ? ` + ${subtaskCount} subtasks` : ""}`,
       description: plannedCellCount > 0
         ? `${plannedCellCount} cells auto-marked as planned based on schedule dates.`
         : "No date overlap — mark statuses manually.",
