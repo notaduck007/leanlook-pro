@@ -148,7 +148,7 @@ export default function LookAheadEditor() {
         id: l.id,
         task_id: l.task_id,
         custom_text: l.custom_text,
-        task_name: l.task_id ? taskMap[l.task_id]?.name || "Unknown Task" : l.custom_text || "",
+        task_name: l.task_id ? taskMap[l.task_id]?.name || "Unknown Task" : (l.custom_text || "").replace(/^↳\s*/, ""),
         assigned_trade: l.assigned_trade,
         materials_needed: l.materials_needed,
         constraints: l.constraints,
@@ -156,6 +156,7 @@ export default function LookAheadEditor() {
         photos: (l.photos as string[]) || [],
         status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
         sort_order: l.sort_order || 0,
+        parent_line_id: (l as any).parent_line_id || null,
       }));
 
       setLines(mappedLines);
