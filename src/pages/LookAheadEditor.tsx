@@ -813,7 +813,11 @@ export default function LookAheadEditor() {
     );
   }, [hierarchicalLines, filter]);
 
-  if (loading) {
+  const sortableIds = useMemo(() =>
+    filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)]),
+    [filteredLines]
+  );
+
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
