@@ -7,11 +7,11 @@ import autoTable from "jspdf-autotable";
 
 function statusSymbol(s: DayStatus): string {
   switch (s) {
-    case "Y": return "✓";
-    case "N": return "✕";
-    case "50": return "%";
-    case "planned": return "○";
-    case "progress": return "→";
+    case "Y": return "Y";
+    case "N": return "X";
+    case "50": return "50";
+    case "planned": return "P";
+    case "progress": return "IP";
     default: return "";
   }
 }
@@ -25,6 +25,85 @@ function statusColors(s: DayStatus): { fill: [number, number, number]; text: [nu
     case "progress": return { fill: [254, 215, 170], text: [154, 52, 18] };
     default: return null;
   }
+}
+
+interface PDFRow {
+  task: string;
+  trade: string;
+  notes: string;
+  materials: string;
+  isParent: boolean;
+  isSubtask: boolean;
+  [dateKey: string]: string | boolean;
+}
+
+function buildHierarchicalRows(
+  lines: LookaheadLineData[],
+  dates: string[],
+  comparisonData?: ComparisonData | null
+): PDFRow[] {
+  // Group by parent
+  const parentLines: LookaheadLineData[] = [];
+  const childrenByParent = new Map<string, LookaheadLineData[]>();
+
+  lines.forEach((l) => {
+    if (l.parent_line_id) {
+      const existing = childrenByParent.get(l.parent_line_id) || [];
+      existing.push(l);
+      childrenByParent.set(l.parent_line_id, existing);
+    } else {
+      parentLines.push(l);
+    }
+  });
+
+  const rows: PDFRow[] = [];
+  const lineKey = (taskId: string | null, customText: string | null) => taskId || customText || "";
+
+  for (const parent of parentLines) {
+    let taskName = parent.task_name || parent.custom_text || "";
+    if (comparisonData) {
+      const key = lineKey(parent.task_id, parent.custom_text);
+      if (key && comparisonData.newLineKeys.has(key)) {
+        taskName = "[NEW] " + taskName;
+      }
+    }
+
+    const parentRow: PDFRow = {
+      task: taskName,
+      trade: parent.assigned_trade || "",
+      notes: parent.notes || "",
+      materials: parent.materials_needed || "",
+      isParent: childrenByParent.has(parent.id),
+      isSubtask: false,
+    };
+
+    dates.forEach((d) => {
+      parentRow[d] = statusSymbol((parent.status_per_day[d] as DayStatus) || "");
+    });
+
+    rows.push(parentRow);
+
+    // Add children
+    const children = childrenByParent.get(parent.id) || [];
+    children.sort((a, b) => a.sort_order - b.sort_order);
+    for (const child of children) {
+      const childName = (child.task_name || child.custom_text || "").replace(/^↳\s*/, "");
+      const childRow: PDFRow = {
+        task: "    " + childName,
+        trade: child.assigned_trade || "",
+        notes: child.notes || "",
+        materials: child.materials_needed || "",
+        isParent: false,
+        isSubtask: true,
+      };
+      dates.forEach((d) => {
+        childRow[d] = statusSymbol((child.status_per_day[d] as DayStatus) || "");
+      });
+      rows.push(childRow);
+    }
+  }
+
+  return rows;
 }
 
 export async function generateLookaheadPDF(
@@ -41,14 +120,17 @@ export async function generateLookaheadPDF(
   // Header
   doc.setFontSize(16);
   doc.setTextColor(15, 23, 42);
-  doc.text(`${projectName} — 2-Week Look-Ahead`, 40, 36);
+  doc.text(`${projectName} -- 2-Week Look-Ahead`, 40, 36);
 
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    `Week of ${format(parseISO(weekStart), "MMMM d, yyyy")}  ·  Superintendent: ${superName}  ·  Generated ${format(new Date(), "MMM d, yyyy h:mm a")}`,
+    `Week of ${format(parseISO(weekStart), "MMMM d, yyyy")}  |  Superintendent: ${superName}  |  Generated ${format(new Date(), "MMM d, yyyy h:mm a")}`,
     40, 50
   );
+
+  // Build hierarchical rows
+  const rows = buildHierarchicalRows(lines, dates, comparisonData);
 
   // Build columns
   const columns = [
@@ -62,32 +144,9 @@ export async function generateLookaheadPDF(
     { header: "Materials", dataKey: "materials" },
   ];
 
-  // Build rows
-  const lineKey = (taskId: string | null, customText: string | null) => taskId || customText || "";
-
-  const rows = lines.map((line) => {
-    const row: Record<string, string> = {
-      task: line.task_name || line.custom_text || "",
-      trade: line.assigned_trade || "",
-      notes: line.notes || "",
-      materials: line.materials_needed || "",
-    };
-    // Add comparison badge to task name
-    if (comparisonData) {
-      const key = lineKey(line.task_id, line.custom_text);
-      if (key && comparisonData.newLineKeys.has(key)) {
-        row.task = "[NEW] " + row.task;
-      }
-    }
-    dates.forEach((d) => {
-      row[d] = statusSymbol((line.status_per_day[d] as DayStatus) || "");
-    });
-    return row;
-  });
-
   // Column widths
-  const taskColWidth = 110;
-  const tradeColWidth = 52;
+  const taskColWidth = 140;
+  const tradeColWidth = 60;
   const notesColWidth = 72;
   const materialsColWidth = 64;
   const fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
@@ -128,15 +187,50 @@ export async function generateLookaheadPDF(
     columnStyles,
     alternateRowStyles: { fillColor: [249, 250, 251] },
     didParseCell: (data: any) => {
+      if (data.section !== "body") {
+        // Weekend shading for header
+        if (data.section === "head" && dates.includes(data.column.dataKey)) {
+          const dt = parseISO(data.column.dataKey);
+          const day = dt.getDay();
+          if (day === 0 || day === 6) {
+            data.cell.styles.fillColor = [226, 232, 240];
+          }
+        }
+        return;
+      }
+
+      const rowData = rows[data.row.index];
+      if (!rowData) return;
+
+      // Parent task styling: bold, darker background
+      if (rowData.isParent && data.column.dataKey === "task") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 8;
+      }
+
+      // Parent row background
+      if (rowData.isParent) {
+        data.cell.styles.fillColor = [230, 237, 246];
+      }
+
+      // Subtask styling: lighter text, indented (already has spaces in name)
+      if (rowData.isSubtask) {
+        data.cell.styles.fillColor = [245, 247, 250];
+        if (data.column.dataKey === "task") {
+          data.cell.styles.textColor = [100, 116, 139];
+          data.cell.styles.fontSize = 7;
+        }
+      }
+
       // Color status cells
-      if (data.section === "body" && dates.includes(data.column.dataKey)) {
+      if (dates.includes(data.column.dataKey)) {
         const raw = data.cell.raw as string;
         let status: DayStatus = "";
-        if (raw === "✓") status = "Y";
-        else if (raw === "✕") status = "N";
-        else if (raw === "%") status = "50";
-        else if (raw === "○") status = "planned";
-        else if (raw === "→") status = "progress";
+        if (raw === "Y") status = "Y";
+        else if (raw === "X") status = "N";
+        else if (raw === "50") status = "50";
+        else if (raw === "P") status = "planned";
+        else if (raw === "IP") status = "progress";
 
         const colors = statusColors(status);
         if (colors) {
@@ -145,21 +239,12 @@ export async function generateLookaheadPDF(
         }
       }
 
-      // New task highlight - blue left border on task cell
-      if (data.section === "body" && data.column.dataKey === "task") {
+      // New task highlight
+      if (data.column.dataKey === "task") {
         const raw = data.cell.raw as string;
         if (raw.startsWith("[NEW] ")) {
           data.cell.styles.textColor = [30, 64, 175];
           data.cell.styles.fontStyle = "bold";
-        }
-      }
-
-      // Weekend shading for header
-      if (data.section === "head" && dates.includes(data.column.dataKey)) {
-        const dt = parseISO(data.column.dataKey);
-        const day = dt.getDay();
-        if (day === 0 || day === 6) {
-          data.cell.styles.fillColor = [226, 232, 240];
         }
       }
     },
@@ -171,7 +256,7 @@ export async function generateLookaheadPDF(
   const legendY = finalY + 14;
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text("✓ Complete    ✕ Not Done    % Partial    ○ Planned    → In Progress", 40, legendY);
+  doc.text("Y = Complete    X = Not Done    50 = Partial    P = Planned    IP = In Progress", 40, legendY);
   finalY = legendY;
 
   // Week-over-week comparison summary
@@ -184,14 +269,14 @@ export async function generateLookaheadPDF(
     finalY += 14;
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
-    doc.text(`• ${comparisonData.carriedOverCount} tasks carried over from last week`, 50, finalY);
+    doc.text(`- ${comparisonData.carriedOverCount} tasks carried over from last week`, 50, finalY);
     finalY += 11;
-    doc.text(`• ${comparisonData.newCount} new tasks added this week`, 50, finalY);
+    doc.text(`- ${comparisonData.newCount} new tasks added this week`, 50, finalY);
     finalY += 11;
-    doc.text(`• ${comparisonData.removedCount} tasks completed/removed since last week`, 50, finalY);
+    doc.text(`- ${comparisonData.removedCount} tasks completed/removed since last week`, 50, finalY);
     if (comparisonData.previousPPC !== null) {
       finalY += 11;
-      doc.text(`• Last week's PPC: ${comparisonData.previousPPC}%`, 50, finalY);
+      doc.text(`- Last week's PPC: ${comparisonData.previousPPC}%`, 50, finalY);
     }
 
     // List removed tasks
@@ -206,7 +291,7 @@ export async function generateLookaheadPDF(
           doc.addPage();
           finalY = 40;
         }
-        doc.text(`  – ${line.task_name}${line.assigned_trade ? ` (${line.assigned_trade})` : ""}`, 56, finalY);
+        doc.text(`  - ${line.task_name}${line.assigned_trade ? ` (${line.assigned_trade})` : ""}`, 56, finalY);
       });
     }
   }
