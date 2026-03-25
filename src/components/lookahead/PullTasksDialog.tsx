@@ -367,9 +367,11 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
 
     let plannedCellCount = 0;
     let sortOrder = 0;
-    const allInserts: any[] = [];
+    const parentInserts: any[] = [];
+    const subtasksByParentIdx: Map<number, Array<{ name: string; category: string | null }>> = new Map();
 
-    for (const task of selected) {
+    for (let idx = 0; idx < selected.length; idx++) {
+      const task = selected[idx];
       const taskTags = task.tags || [];
       let materials: string | null = null;
       let constraints: string | null = null;
@@ -396,8 +398,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         }
       }
 
-      // Insert parent task line
-      allInserts.push({
+      parentInserts.push({
         lookahead_id: lookaheadId,
         company_id: companyId,
         task_id: task.id,
@@ -408,38 +409,60 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         constraints,
       });
 
-      // Insert subtask lines from master repository
+      // Collect subtasks for this parent
       const normalized = task.name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
       const masterTaskId = masterTaskMap.get(normalized);
       if (masterTaskId) {
         const subtasks = subtasksByMasterId.get(masterTaskId) || [];
-        for (const st of subtasks) {
-          allInserts.push({
-            lookahead_id: lookaheadId,
-            company_id: companyId,
-            task_id: null,
-            custom_text: `↳ ${st.name}`,
-            sort_order: sortOrder++,
-            status_per_day: {},
-            assigned_trade: st.category || null,
-            materials_needed: null,
-            constraints: null,
-          });
+        if (subtasks.length > 0) {
+          subtasksByParentIdx.set(idx, subtasks.map(st => ({ name: st.name, category: st.category })));
+          // Reserve sort_order slots for subtasks
+          sortOrder += subtasks.length;
         }
       }
     }
 
-    // Insert in batches of 50
-    for (let i = 0; i < allInserts.length; i += 50) {
-      await supabase.from("lookahead_lines").insert(allInserts.slice(i, i + 50));
+    // Insert parent lines first to get their IDs
+    const insertedParents: any[] = [];
+    for (let i = 0; i < parentInserts.length; i += 50) {
+      const { data } = await supabase.from("lookahead_lines").insert(parentInserts.slice(i, i + 50)).select();
+      if (data) insertedParents.push(...data);
     }
 
-    const subtaskCount = allInserts.length - selected.length;
+    // Insert subtasks with parent_line_id
+    const subtaskInserts: any[] = [];
+    let totalSubtasks = 0;
+    for (const [parentIdx, subtasks] of subtasksByParentIdx.entries()) {
+      const parentRow = insertedParents[parentIdx];
+      if (!parentRow) continue;
+      const baseSortOrder = parentRow.sort_order + 1;
+      for (let si = 0; si < subtasks.length; si++) {
+        const st = subtasks[si];
+        subtaskInserts.push({
+          lookahead_id: lookaheadId,
+          company_id: companyId,
+          task_id: null,
+          custom_text: st.name,
+          sort_order: baseSortOrder + si,
+          status_per_day: {},
+          assigned_trade: st.category || null,
+          materials_needed: null,
+          constraints: null,
+          parent_line_id: parentRow.id,
+        });
+        totalSubtasks++;
+      }
+    }
+
+    for (let i = 0; i < subtaskInserts.length; i += 50) {
+      await supabase.from("lookahead_lines").insert(subtaskInserts.slice(i, i + 50));
+    }
+
     setPulling(false);
     setOpen(false);
 
     toast({
-      title: `Pulled ${selected.length} tasks${subtaskCount > 0 ? ` + ${subtaskCount} subtasks` : ""}`,
+      title: `Pulled ${selected.length} tasks${totalSubtasks > 0 ? ` + ${totalSubtasks} subtasks` : ""}`,
       description: plannedCellCount > 0
         ? `${plannedCellCount} cells auto-marked as planned based on schedule dates.`
         : "No date overlap — mark statuses manually.",
@@ -474,7 +497,9 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         <div
           className={cn(
             "flex items-center gap-2 px-2 py-1.5 border-b last:border-0 text-sm",
-            alreadyExists && "opacity-50"
+            alreadyExists && "opacity-50",
+            hasChildren && depth === 0 && "bg-muted/30 border-l-2 border-l-primary/50",
+            depth > 0 && "text-muted-foreground"
           )}
           style={{ paddingLeft: `${8 + depth * 20}px` }}
         >
@@ -485,13 +510,14 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           ) : (
             <span className="w-5" />
           )}
+          {depth > 0 && <span className="text-xs text-muted-foreground">↳</span>}
           <Checkbox
             checked={task.selected}
             disabled={alreadyExists}
             onCheckedChange={(checked) => toggleTask(task.id, !!checked, activeTab as "browse" | "date")}
           />
           <div className="flex-1 min-w-0">
-            <span className={cn("truncate block", hasChildren && "font-medium")}>{task.name}</span>
+            <span className={cn("truncate block", hasChildren && depth === 0 && "font-semibold")}>{task.name}</span>
             {task.start_date && (
               <span className="text-xs text-muted-foreground">
                 {format(parseISO(task.start_date), "MMM d")} — {task.finish_date ? format(parseISO(task.finish_date), "MMM d") : "?"}

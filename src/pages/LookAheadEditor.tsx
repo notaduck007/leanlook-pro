@@ -148,7 +148,7 @@ export default function LookAheadEditor() {
         id: l.id,
         task_id: l.task_id,
         custom_text: l.custom_text,
-        task_name: l.task_id ? taskMap[l.task_id]?.name || "Unknown Task" : l.custom_text || "",
+        task_name: l.task_id ? taskMap[l.task_id]?.name || "Unknown Task" : (l.custom_text || "").replace(/^↳\s*/, ""),
         assigned_trade: l.assigned_trade,
         materials_needed: l.materials_needed,
         constraints: l.constraints,
@@ -156,6 +156,7 @@ export default function LookAheadEditor() {
         photos: (l.photos as string[]) || [],
         status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
         sort_order: l.sort_order || 0,
+        parent_line_id: (l as any).parent_line_id || null,
       }));
 
       setLines(mappedLines);
@@ -293,12 +294,49 @@ export default function LookAheadEditor() {
       await supabase.from("tasks").update({ name: newName }).eq("id", line.task_id);
     }
 
+    // Sync to master repository
+    if (line.parent_line_id) {
+      // This is a subtask — find parent to get master_task context
+      const parentLine = lines.find((l) => l.id === line.parent_line_id);
+      if (parentLine) {
+        const parentName = parentLine.task_name || parentLine.custom_text || "";
+        const normalized = parentName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+        const { data: masterTask } = await supabase
+          .from("master_tasks")
+          .select("id")
+          .eq("normalized_name", normalized)
+          .maybeSingle();
+
+        if (masterTask) {
+          // Find and update the matching subtask by old name or position
+          const oldName = (line.task_name || line.custom_text || "").replace(/^↳\s*/, "");
+          const cleanNewName = newName.replace(/^↳\s*/, "");
+          await supabase
+            .from("master_subtasks")
+            .update({ name: cleanNewName })
+            .eq("master_task_id", masterTask.id)
+            .eq("name", oldName);
+        }
+      }
+    } else {
+      // This is a main task — sync name to master_tasks
+      const oldName = (line.task_name || line.custom_text || "");
+      const oldNormalized = oldName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      const newNormalized = newName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      await supabase
+        .from("master_tasks")
+        .update({ name: newName, normalized_name: newNormalized })
+        .eq("normalized_name", oldNormalized);
+    }
+
     markDirty();
   };
 
   const handleDeleteLine = async (lineId: string) => {
+    // Also delete child lines (cascade handles DB, but clean local state)
+    const childIds = lines.filter((l) => l.parent_line_id === lineId).map((l) => l.id);
     await supabase.from("lookahead_lines").delete().eq("id", lineId);
-    setLines((prev) => prev.filter((l) => l.id !== lineId));
+    setLines((prev) => prev.filter((l) => l.id !== lineId && l.parent_line_id !== lineId));
     toast({ title: "Row deleted" });
   };
 
@@ -408,8 +446,83 @@ export default function LookAheadEditor() {
           photos: [],
           status_per_day: {},
           sort_order: lines.length,
+          parent_line_id: null,
         },
       ]);
+    }
+  };
+
+  const handleAddSubtask = async (parentLineId: string) => {
+    if (!lookaheadId || !profile?.company_id) return;
+    const parentLine = lines.find((l) => l.id === parentLineId);
+    if (!parentLine) return;
+
+    // Find parent's position to insert subtask right after parent + existing subtasks
+    const parentIdx = lines.findIndex((l) => l.id === parentLineId);
+    const existingSubtasks = lines.filter((l) => l.parent_line_id === parentLineId);
+    const insertSortOrder = parentLine.sort_order + existingSubtasks.length + 1;
+
+    const { data } = await supabase
+      .from("lookahead_lines")
+      .insert({
+        lookahead_id: lookaheadId,
+        company_id: profile.company_id,
+        custom_text: "New Subtask",
+        sort_order: insertSortOrder,
+        status_per_day: {},
+        parent_line_id: parentLineId,
+      })
+      .select()
+      .single();
+
+    if (data) {
+      const newSubtask: LookaheadLineData = {
+        id: data.id,
+        task_id: null,
+        custom_text: "New Subtask",
+        task_name: "New Subtask",
+        assigned_trade: null,
+        materials_needed: null,
+        constraints: null,
+        notes: null,
+        photos: [],
+        status_per_day: {},
+        sort_order: insertSortOrder,
+        parent_line_id: parentLineId,
+      };
+
+      // Insert right after parent and its existing subtasks
+      setLines((prev) => {
+        const result = [...prev];
+        const lastSubIdx = prev.reduce((last, l, i) => l.parent_line_id === parentLineId ? i : last, parentIdx);
+        result.splice(lastSubIdx + 1, 0, newSubtask);
+        return result;
+      });
+
+      // Also sync to master repository: add subtask to master_tasks
+      const parentName = parentLine.task_name || parentLine.custom_text || "";
+      const normalized = parentName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      const { data: masterTask } = await supabase
+        .from("master_tasks")
+        .select("id")
+        .eq("normalized_name", normalized)
+        .maybeSingle();
+
+      if (masterTask) {
+        // Count existing subtasks for sort_order
+        const { count } = await supabase
+          .from("master_subtasks")
+          .select("id", { count: "exact", head: true })
+          .eq("master_task_id", masterTask.id);
+
+        await supabase.from("master_subtasks").insert({
+          master_task_id: masterTask.id,
+          name: "New Subtask",
+          sort_order: (count || 0) + 1,
+        });
+      }
+
+      toast({ title: "Subtask added" });
     }
   };
 
@@ -676,18 +789,47 @@ export default function LookAheadEditor() {
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
   const isRejected = lookAhead?.status === "rejected";
 
+  // Build hierarchical lines: group subtasks under their parents
+  const buildHierarchicalLines = (flatLines: LookaheadLineData[]): LookaheadLineData[] => {
+    const parentLines: LookaheadLineData[] = [];
+    const childrenByParent = new Map<string, LookaheadLineData[]>();
+
+    flatLines.forEach((l) => {
+      if (l.parent_line_id) {
+        const existing = childrenByParent.get(l.parent_line_id) || [];
+        existing.push({ ...l, depth: 1 });
+        childrenByParent.set(l.parent_line_id, existing);
+      } else {
+        parentLines.push(l);
+      }
+    });
+
+    return parentLines.map((p) => ({
+      ...p,
+      is_parent: childrenByParent.has(p.id),
+      children: childrenByParent.get(p.id) || [],
+      depth: 0,
+    }));
+  };
+
+  const hierarchicalLines = buildHierarchicalLines(lines);
+
   const filteredLines = filter
-    ? lines.filter(
+    ? hierarchicalLines.filter(
         (l) =>
           l.task_name.toLowerCase().includes(filter.toLowerCase()) ||
-          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase())
+          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase()) ||
+          (l.children || []).some(
+            (c) => c.task_name.toLowerCase().includes(filter.toLowerCase())
+          )
       )
-    : lines;
+    : hierarchicalLines;
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
-  // Keep refs in sync for keyboard navigation
-  filteredLinesRef.current = filteredLines;
+  // Keep refs in sync for keyboard navigation (flatten for nav)
+  const flatFilteredLines = filteredLines.flatMap((l) => [l, ...(l.children || [])]);
+  filteredLinesRef.current = flatFilteredLines;
   datesRef.current = dates;
 
   // PPC calculation
@@ -1067,7 +1209,7 @@ export default function LookAheadEditor() {
                       </td>
                     </tr>
                   ) : (
-                    <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                    <SortableContext items={filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)])} strategy={verticalListSortingStrategy}>
                       {filteredLines.map((line) => (
                         <LookaheadRow
                           key={line.id}
@@ -1077,6 +1219,7 @@ export default function LookAheadEditor() {
                           onFieldChange={handleFieldChange}
                           onDeleteLine={handleDeleteLine}
                           onNameChange={handleNameChange}
+                          onAddSubtask={handleAddSubtask}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}

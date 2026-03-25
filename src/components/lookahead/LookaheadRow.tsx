@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -21,6 +21,7 @@ export interface LookaheadLineData {
   is_parent?: boolean;
   depth?: number;
   children?: LookaheadLineData[];
+  parent_line_id?: string | null;
 }
 
 interface LookaheadRowProps {
@@ -30,17 +31,20 @@ interface LookaheadRowProps {
   onFieldChange: (lineId: string, field: string, value: string) => void;
   onDeleteLine?: (lineId: string) => void;
   onNameChange?: (lineId: string, newName: string) => void;
+  onAddSubtask?: (parentLineId: string) => void;
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
   comparisonData?: ComparisonData | null;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, readOnly, onRegisterRef, onNavigate, comparisonData }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, readOnly, onRegisterRef, onNavigate, comparisonData }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");
   const depth = line.depth || 0;
+  const isSubtask = !!line.parent_line_id;
+  const hasChildren = (line.children?.length ?? 0) > 0;
 
   const {
     attributes,
@@ -75,8 +79,9 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         ref={setNodeRef}
         style={style}
         className={cn(
-          "border-b border-border hover:bg-muted/30 transition-colors",
+          "border-b border-border hover:bg-muted/30 transition-colors group/row",
           line.is_parent && "bg-muted/20 font-medium",
+          isSubtask && "bg-muted/10",
           isDragging && "bg-accent/40",
           isNewTask && "border-l-2 border-l-blue-500"
         )}
@@ -89,11 +94,12 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             )}
-            {line.is_parent && (
+            {hasChildren && (
               <button onClick={() => setCollapsed(!collapsed)} className="p-0.5 hover:bg-accent rounded">
                 {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
             )}
+            {isSubtask && <span className="text-muted-foreground text-xs mr-0.5">↳</span>}
             {editingName && !readOnly ? (
               <input
                 className="flex-1 text-sm bg-transparent border-0 border-b border-ring outline-none px-1 py-0.5"
@@ -105,7 +111,12 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               />
             ) : (
               <span
-                className={cn("text-sm truncate", !readOnly && "cursor-pointer hover:underline")}
+                className={cn(
+                  "text-sm truncate",
+                  !readOnly && "cursor-pointer hover:underline",
+                  line.is_parent && "font-semibold",
+                  isSubtask && "text-muted-foreground"
+                )}
                 onDoubleClick={() => { if (!readOnly) { setNameValue(line.task_name || line.custom_text || ""); setEditingName(true); } }}
                 title="Double-click to edit"
               >
@@ -114,6 +125,16 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
             )}
             {comparisonData && (
               <ComparisonIndicator lineTaskId={line.task_id} lineCustomText={line.custom_text} comparisonData={comparisonData} />
+            )}
+            {/* Add subtask button - only for non-subtask rows */}
+            {!readOnly && !isSubtask && onAddSubtask && (
+              <button
+                onClick={() => onAddSubtask(line.id)}
+                className="p-0.5 text-muted-foreground hover:text-primary rounded hover:bg-accent transition-colors opacity-0 group-hover/row:opacity-100"
+                title="Add subtask"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
             )}
           </div>
         </td>
@@ -216,6 +237,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onFieldChange={onFieldChange}
           onDeleteLine={onDeleteLine}
           onNameChange={onNameChange}
+          onAddSubtask={onAddSubtask}
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
