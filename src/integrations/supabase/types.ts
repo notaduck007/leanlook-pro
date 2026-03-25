@@ -96,6 +96,7 @@ export type Database = {
           lookahead_id: string
           materials_needed: string | null
           notes: string | null
+          parent_line_id: string | null
           photos: string[] | null
           sort_order: number | null
           status_per_day: Json | null
@@ -110,6 +111,7 @@ export type Database = {
           lookahead_id: string
           materials_needed?: string | null
           notes?: string | null
+          parent_line_id?: string | null
           photos?: string[] | null
           sort_order?: number | null
           status_per_day?: Json | null
@@ -124,6 +126,7 @@ export type Database = {
           lookahead_id?: string
           materials_needed?: string | null
           notes?: string | null
+          parent_line_id?: string | null
           photos?: string[] | null
           sort_order?: number | null
           status_per_day?: Json | null
@@ -142,6 +145,13 @@ export type Database = {
             columns: ["lookahead_id"]
             isOneToOne: false
             referencedRelation: "look_aheads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lookahead_lines_parent_line_id_fkey"
+            columns: ["parent_line_id"]
+            isOneToOne: false
+            referencedRelation: "lookahead_lines"
             referencedColumns: ["id"]
           },
           {
