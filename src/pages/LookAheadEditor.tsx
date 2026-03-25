@@ -787,13 +787,41 @@ export default function LookAheadEditor() {
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
   const isRejected = lookAhead?.status === "rejected";
 
+  // Build hierarchical lines: group subtasks under their parents
+  const buildHierarchicalLines = (flatLines: LookaheadLineData[]): LookaheadLineData[] => {
+    const parentLines: LookaheadLineData[] = [];
+    const childrenByParent = new Map<string, LookaheadLineData[]>();
+
+    flatLines.forEach((l) => {
+      if (l.parent_line_id) {
+        const existing = childrenByParent.get(l.parent_line_id) || [];
+        existing.push({ ...l, depth: 1 });
+        childrenByParent.set(l.parent_line_id, existing);
+      } else {
+        parentLines.push(l);
+      }
+    });
+
+    return parentLines.map((p) => ({
+      ...p,
+      is_parent: childrenByParent.has(p.id),
+      children: childrenByParent.get(p.id) || [],
+      depth: 0,
+    }));
+  };
+
+  const hierarchicalLines = buildHierarchicalLines(lines);
+
   const filteredLines = filter
-    ? lines.filter(
+    ? hierarchicalLines.filter(
         (l) =>
           l.task_name.toLowerCase().includes(filter.toLowerCase()) ||
-          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase())
+          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase()) ||
+          (l.children || []).some(
+            (c) => c.task_name.toLowerCase().includes(filter.toLowerCase())
+          )
       )
-    : lines;
+    : hierarchicalLines;
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
