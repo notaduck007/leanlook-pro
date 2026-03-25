@@ -443,8 +443,83 @@ export default function LookAheadEditor() {
           photos: [],
           status_per_day: {},
           sort_order: lines.length,
+          parent_line_id: null,
         },
       ]);
+    }
+  };
+
+  const handleAddSubtask = async (parentLineId: string) => {
+    if (!lookaheadId || !profile?.company_id) return;
+    const parentLine = lines.find((l) => l.id === parentLineId);
+    if (!parentLine) return;
+
+    // Find parent's position to insert subtask right after parent + existing subtasks
+    const parentIdx = lines.findIndex((l) => l.id === parentLineId);
+    const existingSubtasks = lines.filter((l) => l.parent_line_id === parentLineId);
+    const insertSortOrder = parentLine.sort_order + existingSubtasks.length + 1;
+
+    const { data } = await supabase
+      .from("lookahead_lines")
+      .insert({
+        lookahead_id: lookaheadId,
+        company_id: profile.company_id,
+        custom_text: "New Subtask",
+        sort_order: insertSortOrder,
+        status_per_day: {},
+        parent_line_id: parentLineId,
+      })
+      .select()
+      .single();
+
+    if (data) {
+      const newSubtask: LookaheadLineData = {
+        id: data.id,
+        task_id: null,
+        custom_text: "New Subtask",
+        task_name: "New Subtask",
+        assigned_trade: null,
+        materials_needed: null,
+        constraints: null,
+        notes: null,
+        photos: [],
+        status_per_day: {},
+        sort_order: insertSortOrder,
+        parent_line_id: parentLineId,
+      };
+
+      // Insert right after parent and its existing subtasks
+      setLines((prev) => {
+        const result = [...prev];
+        const lastSubIdx = prev.reduce((last, l, i) => l.parent_line_id === parentLineId ? i : last, parentIdx);
+        result.splice(lastSubIdx + 1, 0, newSubtask);
+        return result;
+      });
+
+      // Also sync to master repository: add subtask to master_tasks
+      const parentName = parentLine.task_name || parentLine.custom_text || "";
+      const normalized = parentName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      const { data: masterTask } = await supabase
+        .from("master_tasks")
+        .select("id")
+        .eq("normalized_name", normalized)
+        .maybeSingle();
+
+      if (masterTask) {
+        // Count existing subtasks for sort_order
+        const { count } = await supabase
+          .from("master_subtasks")
+          .select("id", { count: "exact", head: true })
+          .eq("master_task_id", masterTask.id);
+
+        await supabase.from("master_subtasks").insert({
+          master_task_id: masterTask.id,
+          name: "New Subtask",
+          sort_order: (count || 0) + 1,
+        });
+      }
+
+      toast({ title: "Subtask added" });
     }
   };
 
