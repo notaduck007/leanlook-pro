@@ -497,7 +497,9 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         <div
           className={cn(
             "flex items-center gap-2 px-2 py-1.5 border-b last:border-0 text-sm",
-            alreadyExists && "opacity-50"
+            alreadyExists && "opacity-50",
+            hasChildren && depth === 0 && "bg-muted/30 border-l-2 border-l-primary/50",
+            depth > 0 && "text-muted-foreground"
           )}
           style={{ paddingLeft: `${8 + depth * 20}px` }}
         >
@@ -508,13 +510,14 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
           ) : (
             <span className="w-5" />
           )}
+          {depth > 0 && <span className="text-xs text-muted-foreground">↳</span>}
           <Checkbox
             checked={task.selected}
             disabled={alreadyExists}
             onCheckedChange={(checked) => toggleTask(task.id, !!checked, activeTab as "browse" | "date")}
           />
           <div className="flex-1 min-w-0">
-            <span className={cn("truncate block", hasChildren && "font-medium")}>{task.name}</span>
+            <span className={cn("truncate block", hasChildren && depth === 0 && "font-semibold")}>{task.name}</span>
             {task.start_date && (
               <span className="text-xs text-muted-foreground">
                 {format(parseISO(task.start_date), "MMM d")} — {task.finish_date ? format(parseISO(task.finish_date), "MMM d") : "?"}
