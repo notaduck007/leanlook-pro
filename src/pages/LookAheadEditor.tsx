@@ -825,8 +825,9 @@ export default function LookAheadEditor() {
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
-  // Keep refs in sync for keyboard navigation
-  filteredLinesRef.current = filteredLines;
+  // Keep refs in sync for keyboard navigation (flatten for nav)
+  const flatFilteredLines = filteredLines.flatMap((l) => [l, ...(l.children || [])]);
+  filteredLinesRef.current = flatFilteredLines;
   datesRef.current = dates;
 
   // PPC calculation
