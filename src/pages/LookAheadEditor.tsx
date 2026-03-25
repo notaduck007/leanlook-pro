@@ -293,6 +293,41 @@ export default function LookAheadEditor() {
       await supabase.from("tasks").update({ name: newName }).eq("id", line.task_id);
     }
 
+    // Sync to master repository
+    if (line.parent_line_id) {
+      // This is a subtask — find parent to get master_task context
+      const parentLine = lines.find((l) => l.id === line.parent_line_id);
+      if (parentLine) {
+        const parentName = parentLine.task_name || parentLine.custom_text || "";
+        const normalized = parentName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+        const { data: masterTask } = await supabase
+          .from("master_tasks")
+          .select("id")
+          .eq("normalized_name", normalized)
+          .maybeSingle();
+
+        if (masterTask) {
+          // Find and update the matching subtask by old name or position
+          const oldName = (line.task_name || line.custom_text || "").replace(/^↳\s*/, "");
+          const cleanNewName = newName.replace(/^↳\s*/, "");
+          await supabase
+            .from("master_subtasks")
+            .update({ name: cleanNewName })
+            .eq("master_task_id", masterTask.id)
+            .eq("name", oldName);
+        }
+      }
+    } else {
+      // This is a main task — sync name to master_tasks
+      const oldName = (line.task_name || line.custom_text || "");
+      const oldNormalized = oldName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      const newNormalized = newName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      await supabase
+        .from("master_tasks")
+        .update({ name: newName, normalized_name: newNormalized })
+        .eq("normalized_name", oldNormalized);
+    }
+
     markDirty();
   };
 
