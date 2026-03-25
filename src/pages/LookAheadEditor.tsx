@@ -1209,7 +1209,7 @@ export default function LookAheadEditor() {
                       </td>
                     </tr>
                   ) : (
-                    <SortableContext items={filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)])} strategy={verticalListSortingStrategy}>
+                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                       {filteredLines.map((line) => (
                         <LookaheadRow
                           key={line.id}
