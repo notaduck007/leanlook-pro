@@ -157,8 +157,26 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         {dates.map((date) => {
           const isWeekend = [0, 6].includes(new Date(date + "T00:00:00").getDay());
           const cellKey = `${line.id}-${date}`;
+
+          // For parent rows, compute aggregate status from children
+          let aggregateBg = "";
+          if (hasChildren && line.children) {
+            const childStatuses = line.children
+              .map((c) => (c.status_per_day[date] as DayStatus) || "")
+              .filter(Boolean);
+            if (childStatuses.length > 0) {
+              const allY = childStatuses.every((s) => s === "Y");
+              const anyN = childStatuses.some((s) => s === "N");
+              const anyProgress = childStatuses.some((s) => s === "progress" || s === "50");
+              if (allY) aggregateBg = "bg-green-50 dark:bg-green-900/15";
+              else if (anyN) aggregateBg = "bg-red-50 dark:bg-red-900/15";
+              else if (anyProgress) aggregateBg = "bg-yellow-50 dark:bg-yellow-900/15";
+              else aggregateBg = "bg-blue-50 dark:bg-blue-900/15";
+            }
+          }
+
           return (
-            <td key={date} className="py-1 px-0.5 text-center">
+            <td key={date} className={cn("py-1 px-0.5 text-center", aggregateBg)}>
               <StatusCell
                 status={(line.status_per_day[date] as DayStatus) || ""}
                 onChange={(s) => onStatusChange(line.id, date, s)}
