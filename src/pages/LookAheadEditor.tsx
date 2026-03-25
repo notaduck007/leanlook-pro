@@ -789,12 +789,12 @@ export default function LookAheadEditor() {
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
   const isRejected = lookAhead?.status === "rejected";
 
-  // Build hierarchical lines: group subtasks under their parents
-  const buildHierarchicalLines = (flatLines: LookaheadLineData[]): LookaheadLineData[] => {
+  // Build hierarchical lines: group subtasks under their parents (memoized to prevent layout jumps)
+  const hierarchicalLines = useMemo(() => {
     const parentLines: LookaheadLineData[] = [];
     const childrenByParent = new Map<string, LookaheadLineData[]>();
 
-    flatLines.forEach((l) => {
+    lines.forEach((l) => {
       if (l.parent_line_id) {
         const existing = childrenByParent.get(l.parent_line_id) || [];
         existing.push({ ...l, depth: 1 });
@@ -810,20 +810,20 @@ export default function LookAheadEditor() {
       children: childrenByParent.get(p.id) || [],
       depth: 0,
     }));
-  };
+  }, [lines]);
 
-  const hierarchicalLines = buildHierarchicalLines(lines);
-
-  const filteredLines = filter
-    ? hierarchicalLines.filter(
-        (l) =>
-          l.task_name.toLowerCase().includes(filter.toLowerCase()) ||
-          (l.assigned_trade || "").toLowerCase().includes(filter.toLowerCase()) ||
-          (l.children || []).some(
-            (c) => c.task_name.toLowerCase().includes(filter.toLowerCase())
-          )
-      )
-    : hierarchicalLines;
+  const filteredLines = useMemo(() => {
+    if (!filter) return hierarchicalLines;
+    const lowerFilter = filter.toLowerCase();
+    return hierarchicalLines.filter(
+      (l) =>
+        l.task_name.toLowerCase().includes(lowerFilter) ||
+        (l.assigned_trade || "").toLowerCase().includes(lowerFilter) ||
+        (l.children || []).some(
+          (c) => c.task_name.toLowerCase().includes(lowerFilter)
+        )
+    );
+  }, [hierarchicalLines, filter]);
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
