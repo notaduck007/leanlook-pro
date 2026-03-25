@@ -777,18 +777,6 @@ export default function LookAheadEditor() {
     }
   }, [showComparison, projectId, lookAhead?.week_start_date, lines, toast]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const isOwner = lookAhead?.super_id === user?.id;
-  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
-  const isRejected = lookAhead?.status === "rejected";
-
   // Build hierarchical lines: group subtasks under their parents (memoized to prevent layout jumps)
   const hierarchicalLines = useMemo(() => {
     const parentLines: LookaheadLineData[] = [];
@@ -824,6 +812,18 @@ export default function LookAheadEditor() {
         )
     );
   }, [hierarchicalLines, filter]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const isOwner = lookAhead?.super_id === user?.id;
+  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  const isRejected = lookAhead?.status === "rejected";
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
