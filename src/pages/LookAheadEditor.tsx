@@ -1206,7 +1206,7 @@ export default function LookAheadEditor() {
                       </td>
                     </tr>
                   ) : (
-                    <SortableContext items={filteredLines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                    <SortableContext items={filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)])} strategy={verticalListSortingStrategy}>
                       {filteredLines.map((line) => (
                         <LookaheadRow
                           key={line.id}
@@ -1216,6 +1216,7 @@ export default function LookAheadEditor() {
                           onFieldChange={handleFieldChange}
                           onDeleteLine={handleDeleteLine}
                           onNameChange={handleNameChange}
+                          onAddSubtask={handleAddSubtask}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
