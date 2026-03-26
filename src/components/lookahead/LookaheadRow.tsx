@@ -103,6 +103,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     return key ? comparisonData.newLineKeys.has(key) : false;
   })();
 
+  const isHidden = line.hidden === true;
+
   return (
     <>
       <tr
@@ -113,7 +115,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
           isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
-          isNewTask && "border-l-2 border-l-blue-500"
+          isNewTask && "border-l-2 border-l-blue-500",
+          isHidden && "opacity-40"
         )}
       >
         {/* Task Name */}
