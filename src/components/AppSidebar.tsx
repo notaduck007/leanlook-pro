@@ -22,6 +22,7 @@ const navItems = [
   { title: "Projects", url: "/projects", icon: FolderKanban, exact: false },
   { title: "Look-Aheads", url: "/lookaheads", icon: CalendarDays, exact: true, alsoActiveFor: ["/projects/*/lookahead/"] },
   { title: "Master Tasks", url: "/master-tasks", icon: Database, exact: true },
+  { title: "Sub Contractors", url: "/subcontractors", icon: Users, exact: true },
 ];
 
 const adminItems = [

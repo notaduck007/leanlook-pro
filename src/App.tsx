@@ -73,6 +73,7 @@ function AppRoutes() {
       <Route path="/projects/:id/lookahead/:lookaheadId" element={<ProtectedRoute><LookAheadEditor /></ProtectedRoute>} />
       <Route path="/lookaheads" element={<ProtectedRoute><LookAheads /></ProtectedRoute>} />
       <Route path="/master-tasks" element={<ProtectedRoute><MasterTasks /></ProtectedRoute>} />
+      <Route path="/subcontractors" element={<ProtectedRoute><SubContractors /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
