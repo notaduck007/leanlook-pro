@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -26,6 +26,7 @@ export interface LookaheadLineData {
   depth?: number;
   children?: LookaheadLineData[];
   parent_line_id?: string | null;
+  hidden?: boolean;
 }
 
 interface LookaheadRowProps {
@@ -36,14 +37,16 @@ interface LookaheadRowProps {
   onDeleteLine?: (lineId: string) => void;
   onNameChange?: (lineId: string, newName: string) => void;
   onAddSubtask?: (parentLineId: string) => void;
+  onToggleHidden?: (lineId: string, hidden: boolean) => void;
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
   comparisonData?: ComparisonData | null;
   masterTasks?: MasterTaskRecord[];
+  showHidden?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, readOnly, onRegisterRef, onNavigate, comparisonData, masterTasks = [] }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, readOnly, onRegisterRef, onNavigate, comparisonData, masterTasks = [], showHidden }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const depth = line.depth || 0;
   const isSubtask = !!line.parent_line_id;
