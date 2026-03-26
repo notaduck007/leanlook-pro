@@ -154,29 +154,52 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         </td>
 
         {/* Daily Status Cells */}
-        {dates.map((date) => {
+        {dates.map((date, dateIndex) => {
           const isWeekend = [0, 6].includes(new Date(date + "T00:00:00").getDay());
           const cellKey = `${line.id}-${date}`;
 
           let cellBg = "";
+
           if (hasChildren && line.children) {
-            // For parent rows, only aggregate actual work statuses (not planned)
-            const workStatuses = line.children
-              .map((c) => (c.status_per_day[date] as DayStatus) || "")
-              .filter((s) => s === "Y" || s === "N" || s === "50" || s === "progress");
-            if (workStatuses.length > 0) {
-              const allY = workStatuses.every((s) => s === "Y");
-              const anyN = workStatuses.some((s) => s === "N");
-              if (allY) cellBg = "bg-success/10";
-              else if (anyN) cellBg = "bg-destructive/10";
-              else cellBg = "bg-warning/10";
+            // Parent rows: aggregate from children, color this cell and all prior cells
+            // Find the latest date index where any child has a work status
+            const latestWorkIndex = dates.reduce((latest, d, i) => {
+              const hasWork = line.children!.some((c) => {
+                const s = (c.status_per_day[d] as DayStatus) || "";
+                return s === "Y" || s === "N" || s === "50" || s === "progress";
+              });
+              return hasWork ? i : latest;
+            }, -1);
+
+            if (dateIndex <= latestWorkIndex) {
+              // Determine color from the latest status
+              const latestDate = dates[latestWorkIndex];
+              const workStatuses = line.children
+                .map((c) => (c.status_per_day[latestDate] as DayStatus) || "")
+                .filter((s) => s === "Y" || s === "N" || s === "50" || s === "progress");
+              if (workStatuses.length > 0) {
+                const allY = workStatuses.every((s) => s === "Y");
+                const anyN = workStatuses.some((s) => s === "N");
+                if (allY) cellBg = "bg-success/10";
+                else if (anyN) cellBg = "bg-destructive/10";
+                else cellBg = "bg-warning/10";
+              }
             }
           } else {
-            // For individual/subtask rows, only color for actual work statuses
-            const status = (line.status_per_day[date] as DayStatus) || "";
-            if (status === "Y") cellBg = "bg-success/10";
-            else if (status === "N") cellBg = "bg-destructive/10";
-            else if (status === "50" || status === "progress") cellBg = "bg-warning/10";
+            // Individual/subtask rows: find the latest date with a work status,
+            // color from that date backward
+            const latestWorkIndex = dates.reduce((latest, d, i) => {
+              const s = (line.status_per_day[d] as DayStatus) || "";
+              return (s === "Y" || s === "N" || s === "50" || s === "progress") ? i : latest;
+            }, -1);
+
+            if (dateIndex <= latestWorkIndex) {
+              // Use the latest work status to determine the color
+              const latestStatus = (line.status_per_day[dates[latestWorkIndex]] as DayStatus) || "";
+              if (latestStatus === "Y") cellBg = "bg-success/10";
+              else if (latestStatus === "N") cellBg = "bg-destructive/10";
+              else if (latestStatus === "50" || latestStatus === "progress") cellBg = "bg-warning/10";
+            }
           }
 
           return (
