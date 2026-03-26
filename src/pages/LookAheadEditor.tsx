@@ -888,10 +888,11 @@ export default function LookAheadEditor() {
     let planned = 0;
     const perDay: Record<string, { completed: number; total: number }> = {};
 
+    const currentWeekDates = dates.slice(0, 7);
     dates.forEach((d) => { perDay[d] = { completed: 0, total: 0 }; });
 
     lines.forEach((l) => {
-      dates.forEach((d) => {
+      currentWeekDates.forEach((d) => {
         const s = l.status_per_day[d] as DayStatus;
         if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
           planned++;
