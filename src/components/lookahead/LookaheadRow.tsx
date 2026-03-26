@@ -122,6 +122,15 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         {/* Task Name */}
         <td className="py-1.5 px-2 sticky left-0 bg-card z-10 min-w-[200px] max-w-[280px]">
           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
+            {!readOnly && onToggleHidden && (
+              <input
+                type="checkbox"
+                checked={isHidden}
+                onChange={() => onToggleHidden(line.id, !isHidden)}
+                className="h-3 w-3 rounded border-muted-foreground/50 text-primary focus:ring-primary/50 cursor-pointer shrink-0"
+                title={isHidden ? "Unhide row" : "Hide row"}
+              />
+            )}
             {!readOnly && (
               <button {...attributes} {...listeners} className="p-0.5 cursor-grab hover:bg-accent rounded touch-none">
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -133,8 +142,11 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               </button>
             )}
             {isSubtask && <span className="text-muted-foreground text-xs mr-0.5">↳</span>}
+            {isHidden && showHidden && (
+              <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" title="Hidden" />
+            )}
             {readOnly ? (
-              <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground")}>
+              <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
                 {line.task_name || line.custom_text || "—"}
               </span>
             ) : (
@@ -146,7 +158,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                   onAddNew={handleAddNewTask}
                   addNewToastLabel="Master Task database"
                   placeholder="Task name"
-                  className={cn(line.is_parent && "font-semibold", isSubtask && "text-muted-foreground")}
+                  className={cn(line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}
                 />
               </div>
             )}
