@@ -307,11 +307,13 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onDeleteLine={onDeleteLine}
           onNameChange={onNameChange}
           onAddSubtask={onAddSubtask}
+          onToggleHidden={onToggleHidden}
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
           comparisonData={comparisonData}
           masterTasks={masterTasks}
+          showHidden={showHidden}
         />
       ))}
     </>
