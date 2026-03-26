@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
+import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
 
 export interface LookaheadLineData {
   id: string;
@@ -140,14 +141,13 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         </td>
 
         {/* Trade */}
-        <td className="py-1.5 px-1 min-w-[80px]">
+        <td className="py-1.5 px-1 min-w-[120px]">
           {readOnly ? (
             <span className="text-xs text-muted-foreground">{line.assigned_trade || ""}</span>
           ) : (
-            <input
-              className="w-full text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-ring rounded px-1 py-0.5"
-              value={line.assigned_trade || ""}
-              onChange={(e) => onFieldChange(line.id, "assigned_trade", e.target.value)}
+            <SubContractorAutocomplete
+              value={line.assigned_trade}
+              onChange={(companyName) => onFieldChange(line.id, "assigned_trade", companyName)}
               placeholder="Trade"
             />
           )}

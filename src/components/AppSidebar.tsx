@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderKanban, Settings, LogOut, HardHat, BarChart3, CalendarDays, Database } from "lucide-react";
+import { LayoutDashboard, FolderKanban, Settings, LogOut, HardHat, BarChart3, CalendarDays, Database, Users } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,7 @@ const navItems = [
   { title: "Projects", url: "/projects", icon: FolderKanban, exact: false },
   { title: "Look-Aheads", url: "/lookaheads", icon: CalendarDays, exact: true, alsoActiveFor: ["/projects/*/lookahead/"] },
   { title: "Master Tasks", url: "/master-tasks", icon: Database, exact: true },
+  { title: "Sub Contractors", url: "/subcontractors", icon: Users, exact: true },
 ];
 
 const adminItems = [
