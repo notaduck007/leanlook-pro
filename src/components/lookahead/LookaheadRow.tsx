@@ -158,9 +158,9 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           const isWeekend = [0, 6].includes(new Date(date + "T00:00:00").getDay());
           const cellKey = `${line.id}-${date}`;
 
-          // For parent rows, compute aggregate status from children
-          let aggregateBg = "";
+          let cellBg = "";
           if (hasChildren && line.children) {
+            // For parent rows, compute aggregate status from children
             const childStatuses = line.children
               .map((c) => (c.status_per_day[date] as DayStatus) || "")
               .filter(Boolean);
@@ -168,15 +168,22 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               const allY = childStatuses.every((s) => s === "Y");
               const anyN = childStatuses.some((s) => s === "N");
               const anyProgress = childStatuses.some((s) => s === "progress" || s === "50");
-              if (allY) aggregateBg = "bg-green-50 dark:bg-green-900/15";
-              else if (anyN) aggregateBg = "bg-red-50 dark:bg-red-900/15";
-              else if (anyProgress) aggregateBg = "bg-yellow-50 dark:bg-yellow-900/15";
-              else aggregateBg = "bg-blue-50 dark:bg-blue-900/15";
+              if (allY) cellBg = "bg-green-50 dark:bg-green-900/15";
+              else if (anyN) cellBg = "bg-red-50 dark:bg-red-900/15";
+              else if (anyProgress) cellBg = "bg-yellow-50 dark:bg-yellow-900/15";
+              else cellBg = "bg-blue-50 dark:bg-blue-900/15";
             }
+          } else {
+            // For individual/subtask rows, color based on own status
+            const status = (line.status_per_day[date] as DayStatus) || "";
+            if (status === "Y") cellBg = "bg-green-50 dark:bg-green-900/15";
+            else if (status === "N") cellBg = "bg-red-50 dark:bg-red-900/15";
+            else if (status === "50" || status === "progress") cellBg = "bg-yellow-50 dark:bg-yellow-900/15";
+            else if (status === "planned") cellBg = "bg-blue-50 dark:bg-blue-900/15";
           }
 
           return (
-            <td key={date} className={cn("py-1 px-0.5 text-center", aggregateBg)}>
+            <td key={date} className={cn("py-1 px-0.5 text-center", cellBg)}>
               <StatusCell
                 status={(line.status_per_day[date] as DayStatus) || ""}
                 onChange={(s) => onStatusChange(line.id, date, s)}
