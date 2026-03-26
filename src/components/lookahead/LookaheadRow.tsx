@@ -261,16 +261,25 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         </td>
 
         {/* Materials */}
+        {/* Root Cause */}
         <td className="py-1.5 px-1 min-w-[100px]">
           {readOnly ? (
             <span className="text-xs text-muted-foreground">{line.materials_needed || ""}</span>
           ) : (
-            <input
-              className="w-full text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-ring rounded px-1 py-0.5"
+            <select
+              className="w-full text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-ring rounded px-1 py-0.5 cursor-pointer"
               value={line.materials_needed || ""}
               onChange={(e) => onFieldChange(line.id, "materials_needed", e.target.value)}
-              placeholder="Materials"
-            />
+            >
+              <option value="">—</option>
+              <option value="Make Ready">Make Ready</option>
+              <option value="Manpower">Manpower</option>
+              <option value="Material/Equipment">Material/Equipment</option>
+              <option value="Design">Design</option>
+              <option value="Weather">Weather</option>
+              <option value="AHJ">AHJ</option>
+              <option value="Other">Other</option>
+            </select>
           )}
         </td>
 
