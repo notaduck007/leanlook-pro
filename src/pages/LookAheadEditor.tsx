@@ -1231,6 +1231,7 @@ export default function LookAheadEditor() {
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
                           comparisonData={showComparison ? comparisonData : undefined}
+                          masterTasks={masterTasks}
                         />
                       ))}
                     </SortableContext>
