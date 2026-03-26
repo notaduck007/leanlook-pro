@@ -17,6 +17,7 @@ import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { fetchComparisonData, ComparisonData, ComparisonSummaryBar, ComparisonIndicator, RemovedTasksSection } from "@/components/lookahead/WeekComparison";
+import { useMasterTasks } from "@/hooks/useMasterTasks";
 import {
   DndContext,
   closestCenter,
@@ -40,6 +41,7 @@ export default function LookAheadEditor() {
   const { user, profile, roles } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { tasks: masterTasks } = useMasterTasks();
 
   const [lookAhead, setLookAhead] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
@@ -1229,6 +1231,7 @@ export default function LookAheadEditor() {
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
                           comparisonData={showComparison ? comparisonData : undefined}
+                          masterTasks={masterTasks}
                         />
                       ))}
                     </SortableContext>
