@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
-import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -26,6 +26,7 @@ export interface LookaheadLineData {
   depth?: number;
   children?: LookaheadLineData[];
   parent_line_id?: string | null;
+  hidden?: boolean;
 }
 
 interface LookaheadRowProps {
@@ -36,14 +37,16 @@ interface LookaheadRowProps {
   onDeleteLine?: (lineId: string) => void;
   onNameChange?: (lineId: string, newName: string) => void;
   onAddSubtask?: (parentLineId: string) => void;
+  onToggleHidden?: (lineId: string, hidden: boolean) => void;
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
   comparisonData?: ComparisonData | null;
   masterTasks?: MasterTaskRecord[];
+  showHidden?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, readOnly, onRegisterRef, onNavigate, comparisonData, masterTasks = [] }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, readOnly, onRegisterRef, onNavigate, comparisonData, masterTasks = [], showHidden }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const depth = line.depth || 0;
   const isSubtask = !!line.parent_line_id;
@@ -100,6 +103,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     return key ? comparisonData.newLineKeys.has(key) : false;
   })();
 
+  const isHidden = line.hidden === true;
+
   return (
     <>
       <tr
@@ -110,12 +115,22 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
           isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
-          isNewTask && "border-l-2 border-l-blue-500"
+          isNewTask && "border-l-2 border-l-blue-500",
+          isHidden && "opacity-40"
         )}
       >
         {/* Task Name */}
         <td className="py-1.5 px-2 sticky left-0 bg-card z-10 min-w-[200px] max-w-[280px]">
           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
+            {!readOnly && onToggleHidden && (
+              <input
+                type="checkbox"
+                checked={isHidden}
+                onChange={() => onToggleHidden(line.id, !isHidden)}
+                className="h-3 w-3 rounded border-muted-foreground/50 text-primary focus:ring-primary/50 cursor-pointer shrink-0"
+                title={isHidden ? "Unhide row" : "Hide row"}
+              />
+            )}
             {!readOnly && (
               <button {...attributes} {...listeners} className="p-0.5 cursor-grab hover:bg-accent rounded touch-none">
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -127,8 +142,11 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               </button>
             )}
             {isSubtask && <span className="text-muted-foreground text-xs mr-0.5">↳</span>}
+            {isHidden && showHidden && (
+              <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
             {readOnly ? (
-              <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground")}>
+              <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
                 {line.task_name || line.custom_text || "—"}
               </span>
             ) : (
@@ -140,7 +158,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                   onAddNew={handleAddNewTask}
                   addNewToastLabel="Master Task database"
                   placeholder="Task name"
-                  className={cn(line.is_parent && "font-semibold", isSubtask && "text-muted-foreground")}
+                  className={cn(line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}
                 />
               </div>
             )}
@@ -289,11 +307,13 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onDeleteLine={onDeleteLine}
           onNameChange={onNameChange}
           onAddSubtask={onAddSubtask}
+          onToggleHidden={onToggleHidden}
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
           comparisonData={comparisonData}
           masterTasks={masterTasks}
+          showHidden={showHidden}
         />
       ))}
     </>

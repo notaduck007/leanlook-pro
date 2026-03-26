@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical, GitCompareArrows, Download } from "lucide-react";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical, GitCompareArrows, Download, Eye, EyeOff } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, addDays, parseISO, subWeeks, isBefore, isAfter, formatDistanceToNow } from "date-fns";
@@ -53,6 +53,9 @@ export default function LookAheadEditor() {
   const [showComparison, setShowComparison] = useState(false);
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
   const [loadingComparison, setLoadingComparison] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
 
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
@@ -159,6 +162,7 @@ export default function LookAheadEditor() {
         status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
         sort_order: l.sort_order || 0,
         parent_line_id: (l as any).parent_line_id || null,
+        hidden: (l as any).hidden || false,
       }));
 
       setLines(mappedLines);
@@ -335,11 +339,40 @@ export default function LookAheadEditor() {
   };
 
   const handleDeleteLine = async (lineId: string) => {
-    // Also delete child lines (cascade handles DB, but clean local state)
-    const childIds = lines.filter((l) => l.parent_line_id === lineId).map((l) => l.id);
-    await supabase.from("lookahead_lines").delete().eq("id", lineId);
-    setLines((prev) => prev.filter((l) => l.id !== lineId && l.parent_line_id !== lineId));
-    toast({ title: "Row deleted" });
+    // Open three-button modal instead of immediately deleting
+    setDeleteTargetIds([lineId]);
+    setDeleteModalOpen(true);
+  };
+
+  const handleToggleHidden = async (lineId: string, hidden: boolean) => {
+    setLines((prev) => prev.map((l) => l.id === lineId ? { ...l, hidden } : l));
+    await supabase.from("lookahead_lines").update({ hidden }).eq("id", lineId);
+    if (hidden) {
+      toast({ title: "Task hidden from this Look-Ahead." });
+    } else {
+      toast({ title: "Task restored to view." });
+    }
+  };
+
+  const handleHideTargets = async () => {
+    for (const id of deleteTargetIds) {
+      await supabase.from("lookahead_lines").update({ hidden: true }).eq("id", id);
+    }
+    setLines((prev) => prev.map((l) => deleteTargetIds.includes(l.id) ? { ...l, hidden: true } : l));
+    toast({ title: `${deleteTargetIds.length} task(s) hidden from this Look-Ahead.` });
+    setDeleteModalOpen(false);
+    setDeleteTargetIds([]);
+  };
+
+  const handlePermanentDelete = async () => {
+    for (const id of deleteTargetIds) {
+      const childIds = lines.filter((l) => l.parent_line_id === id).map((l) => l.id);
+      await supabase.from("lookahead_lines").delete().eq("id", id);
+    }
+    setLines((prev) => prev.filter((l) => !deleteTargetIds.includes(l.id) && !deleteTargetIds.includes(l.parent_line_id || "")));
+    toast({ title: `${deleteTargetIds.length} task(s) permanently deleted.` });
+    setDeleteModalOpen(false);
+    setDeleteTargetIds([]);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -802,10 +835,20 @@ export default function LookAheadEditor() {
     }));
   }, [lines]);
 
+  const hiddenCount = useMemo(() => lines.filter((l) => l.hidden).length, [lines]);
+
   const filteredLines = useMemo(() => {
-    if (!filter) return hierarchicalLines;
+    let result = hierarchicalLines;
+    // Filter out hidden rows unless showHidden is on
+    if (!showHidden) {
+      result = result.filter((l) => !l.hidden).map((l) => ({
+        ...l,
+        children: (l.children || []).filter((c) => !c.hidden),
+      }));
+    }
+    if (!filter) return result;
     const lowerFilter = filter.toLowerCase();
-    return hierarchicalLines.filter(
+    return result.filter(
       (l) =>
         l.task_name.toLowerCase().includes(lowerFilter) ||
         (l.assigned_trade || "").toLowerCase().includes(lowerFilter) ||
@@ -813,7 +856,7 @@ export default function LookAheadEditor() {
           (c) => c.task_name.toLowerCase().includes(lowerFilter)
         )
     );
-  }, [hierarchicalLines, filter]);
+  }, [hierarchicalLines, filter, showHidden]);
 
   const sortableIds = useMemo(() =>
     filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)]),
@@ -1081,8 +1124,22 @@ export default function LookAheadEditor() {
 
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="hidden md:block">
+        <div className="hidden md:flex items-center gap-3">
           <StatusLegend />
+          <Button
+            variant={showHidden ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowHidden(!showHidden)}
+            className="text-xs"
+          >
+            {showHidden ? <Eye className="mr-1 h-3 w-3" /> : <EyeOff className="mr-1 h-3 w-3" />}
+            {showHidden ? "Hide Hidden" : "Show Hidden"}
+            {hiddenCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] leading-none">
+                {hiddenCount}
+              </span>
+            )}
+          </Button>
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -1227,11 +1284,13 @@ export default function LookAheadEditor() {
                           onDeleteLine={handleDeleteLine}
                           onNameChange={handleNameChange}
                           onAddSubtask={handleAddSubtask}
+                          onToggleHidden={handleToggleHidden}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
                           comparisonData={showComparison ? comparisonData : undefined}
                           masterTasks={masterTasks}
+                          showHidden={showHidden}
                         />
                       ))}
                     </SortableContext>
@@ -1259,6 +1318,44 @@ export default function LookAheadEditor() {
       {showComparison && comparisonData && (
         <RemovedTasksSection removedLines={comparisonData.removedLines} />
       )}
+
+      {/* Three-button Delete/Hide Modal */}
+      <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <AlertDialogContent onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete or Hide?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTargetIds.length === 1
+                ? "Deleting this task will permanently remove it from this Look-Ahead. If you just want to remove it from this view, you can hide it instead — the task will be preserved for future use."
+                : `Deleting these ${deleteTargetIds.length} tasks will permanently remove them from this Look-Ahead. If you just want to remove them from this view, you can hide them instead.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" onClick={() => { setDeleteModalOpen(false); setDeleteTargetIds([]); }}>
+              Cancel
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleHideTargets}
+              >
+                <EyeOff className="mr-1 h-3.5 w-3.5" />
+                Hide
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={handlePermanentDelete}
+              >
+                <Trash2 className="mr-1 h-3 w-3" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

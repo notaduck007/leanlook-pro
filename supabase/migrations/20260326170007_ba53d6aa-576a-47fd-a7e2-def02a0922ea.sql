@@ -1,0 +1,1 @@
+ALTER TABLE public.lookahead_lines ADD COLUMN hidden boolean NOT NULL DEFAULT false;
