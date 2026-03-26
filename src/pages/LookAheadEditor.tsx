@@ -1124,8 +1124,22 @@ export default function LookAheadEditor() {
 
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="hidden md:block">
+        <div className="hidden md:flex items-center gap-3">
           <StatusLegend />
+          <Button
+            variant={showHidden ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowHidden(!showHidden)}
+            className="text-xs"
+          >
+            {showHidden ? <Eye className="mr-1 h-3 w-3" /> : <EyeOff className="mr-1 h-3 w-3" />}
+            {showHidden ? "Hide Hidden" : "Show Hidden"}
+            {hiddenCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] leading-none">
+                {hiddenCount}
+              </span>
+            )}
+          </Button>
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
