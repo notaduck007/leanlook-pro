@@ -1242,7 +1242,7 @@ export default function LookAheadEditor() {
                       );
                     })}
                     <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
-                    <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Materials</th>
+                    <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Root Cause</th>
                     <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[100px]">Constraints</th>
                   </tr>
                   {/* Per-day PPC indicator row */}
