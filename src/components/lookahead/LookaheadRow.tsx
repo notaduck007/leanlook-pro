@@ -143,7 +143,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
             )}
             {isSubtask && <span className="text-muted-foreground text-xs mr-0.5">↳</span>}
             {isHidden && showHidden && (
-              <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" title="Hidden" />
+              <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
             {readOnly ? (
               <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
