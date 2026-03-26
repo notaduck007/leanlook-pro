@@ -41,6 +41,7 @@ export default function LookAheadEditor() {
   const { user, profile, roles } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { tasks: masterTasks } = useMasterTasks();
 
   const [lookAhead, setLookAhead] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
