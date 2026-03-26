@@ -160,26 +160,23 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
 
           let cellBg = "";
           if (hasChildren && line.children) {
-            // For parent rows, compute aggregate status from children
-            const childStatuses = line.children
+            // For parent rows, only aggregate actual work statuses (not planned)
+            const workStatuses = line.children
               .map((c) => (c.status_per_day[date] as DayStatus) || "")
-              .filter(Boolean);
-            if (childStatuses.length > 0) {
-              const allY = childStatuses.every((s) => s === "Y");
-              const anyN = childStatuses.some((s) => s === "N");
-              const anyProgress = childStatuses.some((s) => s === "progress" || s === "50");
-              if (allY) cellBg = "bg-green-50 dark:bg-green-900/15";
-              else if (anyN) cellBg = "bg-red-50 dark:bg-red-900/15";
-              else if (anyProgress) cellBg = "bg-yellow-50 dark:bg-yellow-900/15";
-              else cellBg = "bg-blue-50 dark:bg-blue-900/15";
+              .filter((s) => s === "Y" || s === "N" || s === "50" || s === "progress");
+            if (workStatuses.length > 0) {
+              const allY = workStatuses.every((s) => s === "Y");
+              const anyN = workStatuses.some((s) => s === "N");
+              if (allY) cellBg = "bg-success/10";
+              else if (anyN) cellBg = "bg-destructive/10";
+              else cellBg = "bg-warning/10";
             }
           } else {
-            // For individual/subtask rows, color based on own status
+            // For individual/subtask rows, only color for actual work statuses
             const status = (line.status_per_day[date] as DayStatus) || "";
-            if (status === "Y") cellBg = "bg-green-50 dark:bg-green-900/15";
-            else if (status === "N") cellBg = "bg-red-50 dark:bg-red-900/15";
-            else if (status === "50" || status === "progress") cellBg = "bg-yellow-50 dark:bg-yellow-900/15";
-            else if (status === "planned") cellBg = "bg-blue-50 dark:bg-blue-900/15";
+            if (status === "Y") cellBg = "bg-success/10";
+            else if (status === "N") cellBg = "bg-destructive/10";
+            else if (status === "50" || status === "progress") cellBg = "bg-warning/10";
           }
 
           return (
