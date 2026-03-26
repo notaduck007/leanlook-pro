@@ -339,11 +339,40 @@ export default function LookAheadEditor() {
   };
 
   const handleDeleteLine = async (lineId: string) => {
-    // Also delete child lines (cascade handles DB, but clean local state)
-    const childIds = lines.filter((l) => l.parent_line_id === lineId).map((l) => l.id);
-    await supabase.from("lookahead_lines").delete().eq("id", lineId);
-    setLines((prev) => prev.filter((l) => l.id !== lineId && l.parent_line_id !== lineId));
-    toast({ title: "Row deleted" });
+    // Open three-button modal instead of immediately deleting
+    setDeleteTargetIds([lineId]);
+    setDeleteModalOpen(true);
+  };
+
+  const handleToggleHidden = async (lineId: string, hidden: boolean) => {
+    setLines((prev) => prev.map((l) => l.id === lineId ? { ...l, hidden } : l));
+    await supabase.from("lookahead_lines").update({ hidden }).eq("id", lineId);
+    if (hidden) {
+      toast({ title: "Task hidden from this Look-Ahead." });
+    } else {
+      toast({ title: "Task restored to view." });
+    }
+  };
+
+  const handleHideTargets = async () => {
+    for (const id of deleteTargetIds) {
+      await supabase.from("lookahead_lines").update({ hidden: true }).eq("id", id);
+    }
+    setLines((prev) => prev.map((l) => deleteTargetIds.includes(l.id) ? { ...l, hidden: true } : l));
+    toast({ title: `${deleteTargetIds.length} task(s) hidden from this Look-Ahead.` });
+    setDeleteModalOpen(false);
+    setDeleteTargetIds([]);
+  };
+
+  const handlePermanentDelete = async () => {
+    for (const id of deleteTargetIds) {
+      const childIds = lines.filter((l) => l.parent_line_id === id).map((l) => l.id);
+      await supabase.from("lookahead_lines").delete().eq("id", id);
+    }
+    setLines((prev) => prev.filter((l) => !deleteTargetIds.includes(l.id) && !deleteTargetIds.includes(l.parent_line_id || "")));
+    toast({ title: `${deleteTargetIds.length} task(s) permanently deleted.` });
+    setDeleteModalOpen(false);
+    setDeleteTargetIds([]);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
