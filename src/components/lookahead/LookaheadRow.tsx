@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
 import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -6,6 +6,9 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
 import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
+import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/MasterAutocomplete";
+import { MasterTaskRecord } from "@/hooks/useMasterTasks";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface LookaheadLineData {
   id: string;
@@ -37,12 +40,11 @@ interface LookaheadRowProps {
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
   comparisonData?: ComparisonData | null;
+  masterTasks?: MasterTaskRecord[];
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, readOnly, onRegisterRef, onNavigate, comparisonData }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, readOnly, onRegisterRef, onNavigate, comparisonData, masterTasks = [] }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");
   const depth = line.depth || 0;
   const isSubtask = !!line.parent_line_id;
   const hasChildren = (line.children?.length ?? 0) > 0;
@@ -62,11 +64,35 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const handleNameSave = () => {
-    setEditingName(false);
-    if (nameValue !== (line.task_name || line.custom_text || "") && onNameChange) {
-      onNameChange(line.id, nameValue);
+  const taskAutocompleteItems: AutocompleteItem[] = useMemo(() =>
+    masterTasks.map(t => ({
+      id: t.id,
+      primaryText: t.name,
+      secondaryText: t.category || undefined,
+    })),
+    [masterTasks]
+  );
+
+  const handleTaskNameSelect = (name: string, itemId: string | null) => {
+    if (onNameChange) onNameChange(line.id, name);
+    // Smart defaults: if a master task has default_trade, auto-fill
+    if (itemId) {
+      const mt = masterTasks.find(t => t.id === itemId);
+      if (mt?.default_trade && !line.assigned_trade) {
+        onFieldChange(line.id, "assigned_trade", mt.default_trade);
+      }
     }
+  };
+
+  const handleAddNewTask = async (name: string): Promise<AutocompleteItem | null> => {
+    const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+    const { data, error } = await supabase
+      .from("master_tasks")
+      .insert({ name, normalized_name: normalized, status: "active" })
+      .select("id, name, category")
+      .single();
+    if (error || !data) return null;
+    return { id: data.id, primaryText: data.name, secondaryText: data.category || undefined };
   };
 
   const isNewTask = comparisonData && (() => {
@@ -101,33 +127,26 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               </button>
             )}
             {isSubtask && <span className="text-muted-foreground text-xs mr-0.5">↳</span>}
-            {editingName && !readOnly ? (
-              <input
-                className="flex-1 text-sm bg-transparent border-0 border-b border-ring outline-none px-1 py-0.5"
-                value={nameValue}
-                onChange={(e) => setNameValue(e.target.value)}
-                onBlur={handleNameSave}
-                onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
-                autoFocus
-              />
-            ) : (
-              <span
-                className={cn(
-                  "text-sm truncate",
-                  !readOnly && "cursor-pointer hover:underline",
-                  line.is_parent && "font-semibold",
-                  isSubtask && "text-muted-foreground"
-                )}
-                onDoubleClick={() => { if (!readOnly) { setNameValue(line.task_name || line.custom_text || ""); setEditingName(true); } }}
-                title="Double-click to edit"
-              >
+            {readOnly ? (
+              <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground")}>
                 {line.task_name || line.custom_text || "—"}
               </span>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <MasterAutocomplete
+                  value={line.task_name || line.custom_text || ""}
+                  items={taskAutocompleteItems}
+                  onChange={handleTaskNameSelect}
+                  onAddNew={handleAddNewTask}
+                  addNewToastLabel="Master Task database"
+                  placeholder="Task name"
+                  className={cn(line.is_parent && "font-semibold", isSubtask && "text-muted-foreground")}
+                />
+              </div>
             )}
             {comparisonData && (
               <ComparisonIndicator lineTaskId={line.task_id} lineCustomText={line.custom_text} comparisonData={comparisonData} />
             )}
-            {/* Add subtask button - only for non-subtask rows */}
             {!readOnly && !isSubtask && onAddSubtask && (
               <button
                 onClick={() => onAddSubtask(line.id)}
@@ -168,7 +187,6 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           };
 
           if (hasChildren && line.children) {
-            // Parent rows: only color this specific cell based on children's status for THIS date
             const workStatuses = line.children
               .map((c) => (c.status_per_day[date] as DayStatus) || "")
               .filter((s) => isWorkStatus(s));
@@ -180,12 +198,10 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               else cellBg = "bg-warning/10";
             }
           } else {
-            // Subtask/individual rows: color from latest work status backward
             const latestWorkIndex = dates.reduce((latest, d, i) => {
               const s = (line.status_per_day[d] as DayStatus) || "";
               return isWorkStatus(s) ? i : latest;
             }, -1);
-
             if (dateIndex <= latestWorkIndex) {
               const latestStatus = (line.status_per_day[dates[latestWorkIndex]] as DayStatus) || "";
               cellBg = statusToBg(latestStatus);
@@ -277,6 +293,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
           comparisonData={comparisonData}
+          masterTasks={masterTasks}
         />
       ))}
     </>
