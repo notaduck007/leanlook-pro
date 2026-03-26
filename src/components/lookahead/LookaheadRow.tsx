@@ -80,8 +80,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         style={style}
         className={cn(
           "border-b border-border hover:bg-muted/30 transition-colors group/row",
-          line.is_parent && "bg-muted/20 font-medium",
-          isSubtask && "bg-muted/10",
+          line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
+          isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
           isNewTask && "border-l-2 border-l-blue-500"
         )}
