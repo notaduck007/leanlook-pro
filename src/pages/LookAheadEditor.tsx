@@ -1222,19 +1222,23 @@ export default function LookAheadEditor() {
                       Task
                     </th>
                     <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[80px]">Trade</th>
-                    {dates.map((date) => {
+                    {dates.map((date, i) => {
                       const d = parseISO(date);
                       const isWeekend = [0, 6].includes(d.getDay());
                       return (
-                        <th
-                          key={date}
-                          className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
-                            isWeekend ? "bg-muted/80" : ""
-                          }`}
-                        >
-                          <div>{format(d, "EEE")}</div>
-                          <div>{format(d, "M/d")}</div>
-                        </th>
+                        <React.Fragment key={date}>
+                          {i === 7 && (
+                            <th className="w-2 min-w-[8px] bg-border/40" />
+                          )}
+                          <th
+                            className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
+                              isWeekend ? "bg-muted/80" : ""
+                            }`}
+                          >
+                            <div>{format(d, "EEE")}</div>
+                            <div>{format(d, "M/d")}</div>
+                          </th>
+                        </React.Fragment>
                       );
                     })}
                     <th className="text-left py-2 px-1 font-medium text-muted-foreground min-w-[120px]">Notes</th>
