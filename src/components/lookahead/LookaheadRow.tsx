@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
+import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
 
 export interface LookaheadLineData {
   id: string;
