@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
 import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -227,17 +227,22 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           }
 
           return (
-            <td key={date} className={cn("py-1 px-0.5 text-center", cellBg)}>
-              <StatusCell
-                status={(line.status_per_day[date] as DayStatus) || ""}
-                onChange={(s) => onStatusChange(line.id, date, s)}
-                isWeekend={isWeekend}
-                readOnly={readOnly}
-                cellKey={cellKey}
-                onRegisterRef={onRegisterRef}
-                onNavigate={onNavigate}
-              />
-            </td>
+            <React.Fragment key={date}>
+              {dateIndex === 7 && (
+                <td className="w-2 min-w-[8px] bg-border/40" />
+              )}
+              <td className={cn("py-1 px-0.5 text-center", cellBg)}>
+                <StatusCell
+                  status={(line.status_per_day[date] as DayStatus) || ""}
+                  onChange={(s) => onStatusChange(line.id, date, s)}
+                  isWeekend={isWeekend}
+                  readOnly={readOnly}
+                  cellKey={cellKey}
+                  onRegisterRef={onRegisterRef}
+                  onNavigate={onNavigate}
+                />
+              </td>
+            </React.Fragment>
           );
         })}
 
