@@ -381,6 +381,65 @@ export type Database = {
           },
         ]
       }
+      subcontractors: {
+        Row: {
+          address: string | null
+          company_id: string
+          company_name: string
+          contact_name: string
+          created_at: string
+          email: string | null
+          id: string
+          insurance_expiration: string | null
+          license_number: string | null
+          notes: string | null
+          phone: string
+          status: Database["public"]["Enums"]["subcontractor_status"]
+          trade: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          company_id: string
+          company_name: string
+          contact_name: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          insurance_expiration?: string | null
+          license_number?: string | null
+          notes?: string | null
+          phone: string
+          status?: Database["public"]["Enums"]["subcontractor_status"]
+          trade: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          company_id?: string
+          company_name?: string
+          contact_name?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          insurance_expiration?: string | null
+          license_number?: string | null
+          notes?: string | null
+          phone?: string
+          status?: Database["public"]["Enums"]["subcontractor_status"]
+          trade?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcontractors_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_templates: {
         Row: {
           checklist_items: Json | null
@@ -518,11 +577,14 @@ export type Database = {
         Args: { _company_name: string; _slug: string }
         Returns: string
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "pm" | "super"
       lookahead_status: "draft" | "submitted" | "approved" | "rejected"
       project_status: "active" | "completed" | "on_hold" | "archived"
+      subcontractor_status: "active" | "inactive" | "suspended" | "pending"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -653,6 +715,7 @@ export const Constants = {
       app_role: ["admin", "pm", "super"],
       lookahead_status: ["draft", "submitted", "approved", "rejected"],
       project_status: ["active", "completed", "on_hold", "archived"],
+      subcontractor_status: ["active", "inactive", "suspended", "pending"],
     },
   },
 } as const
