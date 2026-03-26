@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Plus } from "lucide-react";
@@ -38,8 +39,9 @@ export function SubContractorAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
-  // Load all subcontractors on mount for client-side filtering
+  // Load all subcontractors on mount
   useEffect(() => {
     if (!profile?.company_id) return;
     const load = async () => {
@@ -53,21 +55,22 @@ export function SubContractorAutocomplete({
     };
     load();
 
-    // Realtime subscription
     const channel = supabase
-      .channel("subcontractors-autocomplete")
-      .on("postgres_changes", { event: "*", schema: "public", table: "subcontractors" }, () => {
-        load();
-      })
+      .channel(`subs-ac-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subcontractors" }, () => load())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [profile?.company_id]);
 
-  // Sync external value changes
-  useEffect(() => {
-    setInputValue(value || "");
-  }, [value]);
+  useEffect(() => { setInputValue(value || ""); }, [value]);
+
+  const updateDropdownPos = useCallback(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 220) });
+    }
+  }, []);
 
   const search = useCallback((query: string) => {
     if (!query.trim()) {
@@ -90,7 +93,10 @@ export function SubContractorAutocomplete({
     setHighlightIndex(-1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(val), 200);
-    if (!isOpen) setIsOpen(true);
+    if (!isOpen) {
+      updateDropdownPos();
+      setIsOpen(true);
+    }
   };
 
   const selectSub = (sub: Subcontractor) => {
@@ -131,6 +137,7 @@ export function SubContractorAutocomplete({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) {
       if (e.key === "ArrowDown" || e.key === "Enter") {
+        updateDropdownPos();
         setIsOpen(true);
         search(inputValue);
         e.preventDefault();
@@ -162,30 +169,22 @@ export function SubContractorAutocomplete({
     }
   };
 
-  const handleBlur = (e: React.FocusEvent) => {
-    // Delay close to allow click on dropdown
+  const handleBlur = () => {
     setTimeout(() => {
       if (!dropdownRef.current?.contains(document.activeElement)) {
         setIsOpen(false);
-        // If no sub selected and text doesn't match, clear
-        if (inputValue && !subcontractorId) {
-          const match = allSubs.find(
-            (s) => s.company_name.toLowerCase() === inputValue.toLowerCase()
-          );
-          if (!match) {
-            // Leave input but don't set ID
-          }
-        }
       }
-    }, 150);
+    }, 200);
   };
 
   const handleFocus = () => {
+    updateDropdownPos();
     search(inputValue);
     setIsOpen(true);
   };
 
   const noMatch = isOpen && results.length === 0 && inputValue.trim().length > 0;
+  const showDropdown = isOpen && (results.length > 0 || noMatch);
 
   return (
     <div className="relative">
@@ -212,7 +211,7 @@ export function SubContractorAutocomplete({
           <button
             type="button"
             className="absolute right-0.5 top-1/2 -translate-y-1/2 p-0.5 text-primary hover:bg-primary/10 rounded"
-            onClick={addNewSub}
+            onMouseDown={(e) => { e.preventDefault(); addNewSub(); }}
             title="Add as new subcontractor"
             tabIndex={-1}
           >
@@ -220,10 +219,11 @@ export function SubContractorAutocomplete({
           </button>
         )}
       </div>
-      {isOpen && (results.length > 0 || noMatch) && (
+      {showDropdown && createPortal(
         <div
           ref={dropdownRef}
-          className="absolute z-50 top-full left-0 mt-1 w-56 max-h-48 overflow-auto rounded-md border bg-popover shadow-md animate-in fade-in-0 slide-in-from-top-1 duration-150"
+          className="fixed z-[9999] max-h-48 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 slide-in-from-top-1 duration-150"
+          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
           role="listbox"
         >
           {results.map((sub, i) => (
@@ -249,7 +249,8 @@ export function SubContractorAutocomplete({
               <Plus className="inline h-3 w-3" /> to add.
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
