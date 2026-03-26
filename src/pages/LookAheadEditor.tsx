@@ -835,10 +835,20 @@ export default function LookAheadEditor() {
     }));
   }, [lines]);
 
+  const hiddenCount = useMemo(() => lines.filter((l) => l.hidden).length, [lines]);
+
   const filteredLines = useMemo(() => {
-    if (!filter) return hierarchicalLines;
+    let result = hierarchicalLines;
+    // Filter out hidden rows unless showHidden is on
+    if (!showHidden) {
+      result = result.filter((l) => !l.hidden).map((l) => ({
+        ...l,
+        children: (l.children || []).filter((c) => !c.hidden),
+      }));
+    }
+    if (!filter) return result;
     const lowerFilter = filter.toLowerCase();
-    return hierarchicalLines.filter(
+    return result.filter(
       (l) =>
         l.task_name.toLowerCase().includes(lowerFilter) ||
         (l.assigned_trade || "").toLowerCase().includes(lowerFilter) ||
@@ -846,7 +856,7 @@ export default function LookAheadEditor() {
           (c) => c.task_name.toLowerCase().includes(lowerFilter)
         )
     );
-  }, [hierarchicalLines, filter]);
+  }, [hierarchicalLines, filter, showHidden]);
 
   const sortableIds = useMemo(() =>
     filteredLines.flatMap((l) => [l.id, ...(l.children || []).map(c => c.id)]),
