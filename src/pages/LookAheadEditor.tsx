@@ -1318,6 +1318,44 @@ export default function LookAheadEditor() {
       {showComparison && comparisonData && (
         <RemovedTasksSection removedLines={comparisonData.removedLines} />
       )}
+
+      {/* Three-button Delete/Hide Modal */}
+      <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <AlertDialogContent onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete or Hide?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTargetIds.length === 1
+                ? "Deleting this task will permanently remove it from this Look-Ahead. If you just want to remove it from this view, you can hide it instead — the task will be preserved for future use."
+                : `Deleting these ${deleteTargetIds.length} tasks will permanently remove them from this Look-Ahead. If you just want to remove them from this view, you can hide them instead.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" onClick={() => { setDeleteModalOpen(false); setDeleteTargetIds([]); }}>
+              Cancel
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleHideTargets}
+              >
+                <EyeOff className="mr-1 h-3.5 w-3.5" />
+                Hide
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={handlePermanentDelete}
+              >
+                <Trash2 className="mr-1 h-3 w-3" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
