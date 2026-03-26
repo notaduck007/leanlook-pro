@@ -1,277 +1,340 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Database, ChevronDown, ChevronRight, Check, X, Trash2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
-interface MasterSubtask {
-  id: string;
-  name: string;
-  sort_order: number;
-  category: string | null;
-}
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { Search, Plus, Trash2, Edit, Download, ArrowUpDown, Loader2, Database } from "lucide-react";
 
 interface MasterTask {
   id: string;
   name: string;
-  tags: string[];
+  normalized_name: string;
   category: string | null;
+  default_duration: number | null;
+  default_trade: string | null;
+  description: string | null;
+  status: string;
+  tags: string[];
   created_at: string;
-  subtasks?: MasterSubtask[];
+  updated_at: string;
 }
 
-const categoryColors: Record<string, string> = {
-  prep: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  execute: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  inspect: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  closeout: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+const emptyForm: Partial<MasterTask> = {
+  name: "", category: "", default_duration: null, default_trade: "",
+  description: "", status: "active",
 };
+
+const statusColors: Record<string, string> = {
+  active: "bg-success/10 text-success border-success/30",
+  inactive: "bg-muted text-muted-foreground border-muted-foreground/30",
+};
+
+type SortKey = "name" | "category" | "default_duration" | "status" | "created_at";
 
 export default function MasterTasks() {
   const [tasks, setTasks] = useState<MasterTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [subtaskCache, setSubtaskCache] = useState<Record<string, MasterSubtask[]>>({});
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<MasterTask | null>(null);
+  const [form, setForm] = useState<Partial<MasterTask>>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const perPage = 25;
 
-  useEffect(() => {
-    supabase
+  const fetchTasks = async () => {
+    const { data } = await supabase
       .from("master_tasks")
       .select("*")
-      .order("name")
-      .then(({ data }) => {
-        setTasks((data as MasterTask[]) || []);
-        setLoading(false);
-      });
+      .order("name");
+    if (data) setTasks(data as unknown as MasterTask[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchTasks();
+    const ch = supabase
+      .channel("master-tasks-admin")
+      .on("postgres_changes", { event: "*", schema: "public", table: "master_tasks" }, () => fetchTasks())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, []);
 
-  const toggleExpand = async (taskId: string) => {
-    const next = new Set(expandedIds);
-    if (next.has(taskId)) {
-      next.delete(taskId);
-    } else {
-      next.add(taskId);
-      if (!subtaskCache[taskId]) {
-        const { data } = await supabase
-          .from("master_subtasks")
-          .select("*")
-          .eq("master_task_id", taskId)
-          .order("sort_order");
-        setSubtaskCache(prev => ({ ...prev, [taskId]: (data as MasterSubtask[]) || [] }));
-      }
-    }
-    setExpandedIds(next);
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const saveTaskName = async (taskId: string) => {
-    if (!editValue.trim()) { setEditingTaskId(null); return; }
-    const { error } = await supabase.from("master_tasks").update({ name: editValue.trim() }).eq("id", taskId);
-    if (error) {
-      toast({ title: "Failed to update", variant: "destructive" });
-    } else {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, name: editValue.trim() } : t));
-      toast({ title: "Task name updated" });
+  const filtered = useMemo(() => {
+    let result = tasks;
+    if (statusFilter !== "all") result = result.filter(t => t.status === statusFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(t =>
+        t.name.toLowerCase().includes(q) ||
+        (t.category || "").toLowerCase().includes(q) ||
+        (t.description || "").toLowerCase().includes(q) ||
+        (t.default_trade || "").toLowerCase().includes(q)
+      );
     }
-    setEditingTaskId(null);
+    result = [...result].sort((a, b) => {
+      const av = (a as any)[sortKey] ?? "";
+      const bv = (b as any)[sortKey] ?? "";
+      const cmp = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return result;
+  }, [tasks, search, statusFilter, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / perPage);
+  const paged = filtered.slice(page * perPage, (page + 1) * perPage);
+
+  const toggleSelect = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleAll = () => {
+    if (selected.size === paged.length) setSelected(new Set());
+    else setSelected(new Set(paged.map(t => t.id)));
   };
 
-  const saveSubtaskName = async (subtaskId: string, masterTaskId: string) => {
-    if (!editValue.trim()) { setEditingSubtaskId(null); return; }
-    const { error } = await supabase.from("master_subtasks").update({ name: editValue.trim() }).eq("id", subtaskId);
-    if (error) {
-      toast({ title: "Failed to update", variant: "destructive" });
-    } else {
-      setSubtaskCache(prev => ({
-        ...prev,
-        [masterTaskId]: (prev[masterTaskId] || []).map(st => st.id === subtaskId ? { ...st, name: editValue.trim() } : st),
-      }));
-      toast({ title: "Subtask name updated" });
-    }
-    setEditingSubtaskId(null);
+  const openAdd = () => { setEditingTask(null); setForm(emptyForm); setSheetOpen(true); };
+  const openEdit = (t: MasterTask) => {
+    setEditingTask(t);
+    setForm({ name: t.name, category: t.category || "", default_duration: t.default_duration, default_trade: t.default_trade || "", description: t.description || "", status: t.status });
+    setSheetOpen(true);
   };
 
-  const deleteSubtask = async (subtaskId: string, masterTaskId: string) => {
-    const { error } = await supabase.from("master_subtasks").delete().eq("id", subtaskId);
-    if (error) {
-      toast({ title: "Failed to delete subtask", variant: "destructive" });
+  const handleSave = async () => {
+    if (!form.name?.trim()) { toast({ title: "Task name is required", variant: "destructive" }); return; }
+    setSaving(true);
+    const normalized = form.name!.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+    const payload: any = {
+      name: form.name!.trim(),
+      normalized_name: normalized,
+      category: form.category || null,
+      default_duration: form.default_duration || null,
+      default_trade: form.default_trade || null,
+      description: form.description || null,
+      status: form.status || "active",
+    };
+    let error;
+    if (editingTask) {
+      ({ error } = await supabase.from("master_tasks").update(payload).eq("id", editingTask.id));
     } else {
-      setSubtaskCache(prev => ({
-        ...prev,
-        [masterTaskId]: (prev[masterTaskId] || []).filter(st => st.id !== subtaskId),
-      }));
-      toast({ title: "Subtask deleted" });
+      ({ error } = await supabase.from("master_tasks").insert(payload));
     }
+    setSaving(false);
+    if (error) { toast({ title: "Error saving task", description: error.message, variant: "destructive" }); return; }
+    toast({ title: editingTask ? "Task updated" : "Task created" });
+    setSheetOpen(false);
+    fetchTasks();
   };
 
-  const filtered = tasks.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    (t.tags || []).some(tag => tag.toLowerCase().includes(search.toLowerCase()))
+  const handleDelete = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const { error } = await supabase.from("master_tasks").delete().in("id", ids);
+    if (error) { toast({ title: "Error deleting", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${ids.length} task(s) deleted` });
+    setSelected(new Set());
+    setDeleteOpen(false);
+    fetchTasks();
+  };
+
+  const exportCSV = () => {
+    const rows = selected.size > 0 ? tasks.filter(t => selected.has(t.id)) : filtered;
+    const headers = ["Name", "Category", "Default Duration", "Default Trade", "Description", "Status"];
+    const csv = [headers.join(","), ...rows.map(t =>
+      [t.name, t.category || "", t.default_duration || "", t.default_trade || "", `"${(t.description || "").replace(/"/g, '""')}"`, t.status].join(",")
+    )].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "master_tasks.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const SortHeader = ({ label, sk }: { label: string; sk: SortKey }) => (
+    <button className="flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort(sk)}>
+      {label} <ArrowUpDown className="h-3 w-3" />
+    </button>
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Database className="h-6 w-6" /> Master Task Repository
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Global knowledge base of {tasks.length} construction tasks with AI-generated subtasks. Double-click any name to edit.
-          </p>
+        <div className="flex items-center gap-2">
+          <Database className="h-5 w-5 text-primary" />
+          <h1 className="text-2xl font-bold">Master Tasks</h1>
+          <Badge variant="secondary" className="text-xs">{filtered.length}</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Export</Button>
+          <Button size="sm" onClick={openAdd}><Plus className="h-4 w-4 mr-1" /> Add Task</Button>
         </div>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search tasks or tags..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4 mr-1" /> Delete
+            </Button>
+          </div>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            {tasks.length === 0
-              ? "No tasks yet. Upload a schedule to start building the repository."
-              : "No tasks match your search."}
-          </CardContent>
-        </Card>
+      {/* Table */}
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(task => (
-            <Card key={task.id} className="overflow-hidden">
-              <button
-                onClick={() => toggleExpand(task.id)}
-                className="w-full text-left"
-              >
-                <CardHeader className="py-3 px-4">
-                  <div className="flex items-center gap-3">
-                    {expandedIds.has(task.id) ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      {editingTaskId === task.id ? (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Input
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="h-7 text-sm"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveTaskName(task.id);
-                              if (e.key === "Escape") setEditingTaskId(null);
-                            }}
-                          />
-                          <button onClick={() => saveTaskName(task.id)} className="p-1 text-green-600 hover:bg-green-50 rounded">
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                          <button onClick={() => setEditingTaskId(null)} className="p-1 text-red-600 hover:bg-red-50 rounded">
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <CardTitle
-                          className="text-sm font-medium truncate cursor-pointer hover:underline"
-                          onDoubleClick={(e) => { e.stopPropagation(); setEditValue(task.name); setEditingTaskId(task.id); }}
-                          title="Double-click to edit"
-                        >
-                          {task.name}
-                        </CardTitle>
-                      )}
-                    </div>
-                    <div className="flex gap-1 flex-wrap justify-end">
-                      {(task.tags || []).slice(0, 3).map(tag => (
-                        <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                      ))}
-                      {(task.tags || []).length > 3 && (
-                        <Badge variant="outline" className="text-xs">+{task.tags.length - 3}</Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-              </button>
-              {expandedIds.has(task.id) && (
-                <CardContent className="pt-0 pb-3 px-4">
-                  <div className="ml-7 space-y-1">
-                    {(subtaskCache[task.id] || []).length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">Loading subtasks...</p>
-                    ) : (
-                      (subtaskCache[task.id] || []).map((st, idx) => (
-                        <div key={st.id} className="group/subtask flex items-center gap-2 py-1">
-                          <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
-                          {editingSubtaskId === st.id ? (
-                            <div className="flex items-center gap-1 flex-1">
-                              <Input
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                className="h-6 text-sm flex-1"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") saveSubtaskName(st.id, task.id);
-                                  if (e.key === "Escape") setEditingSubtaskId(null);
-                                }}
-                              />
-                              <button onClick={() => saveSubtaskName(st.id, task.id)} className="p-0.5 text-green-600 hover:bg-green-50 rounded">
-                                <Check className="h-3 w-3" />
-                              </button>
-                              <button onClick={() => setEditingSubtaskId(null)} className="p-0.5 text-red-600 hover:bg-red-50 rounded">
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            <span
-                              className="text-sm flex-1 cursor-pointer hover:underline"
-                              onDoubleClick={() => { setEditValue(st.name); setEditingSubtaskId(st.id); }}
-                              title="Double-click to edit"
-                            >
-                              {st.name}
-                            </span>
-                          )}
-                          {editingSubtaskId !== st.id && (
-                            <div className="flex items-center gap-1">
-                              {st.category && (
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[st.category] || "bg-muted text-muted-foreground"}`}>
-                                  {st.category}
-                                </span>
-                              )}
-                              <button
-                                onClick={() => deleteSubtask(st.id, task.id)}
-                                className="p-0.5 text-muted-foreground hover:text-destructive rounded hover:bg-destructive/10 transition-colors opacity-0 group-hover/subtask:opacity-100"
-                                title="Delete subtask"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          ))}
+        <div className="rounded-md border overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10"><Checkbox checked={paged.length > 0 && selected.size === paged.length} onCheckedChange={toggleAll} /></TableHead>
+                <TableHead><SortHeader label="Task Name" sk="name" /></TableHead>
+                <TableHead><SortHeader label="Category" sk="category" /></TableHead>
+                <TableHead><SortHeader label="Duration" sk="default_duration" /></TableHead>
+                <TableHead>Default Trade</TableHead>
+                <TableHead><SortHeader label="Status" sk="status" /></TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paged.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No tasks found</TableCell></TableRow>
+              ) : paged.map(t => (
+                <TableRow key={t.id} className="hover:bg-muted/50">
+                  <TableCell><Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleSelect(t.id)} /></TableCell>
+                  <TableCell className="font-medium">{t.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{t.category || "—"}</TableCell>
+                  <TableCell>{t.default_duration ? `${t.default_duration}d` : "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{t.default_trade || "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn(statusColors[t.status] || "")}>{t.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(t)}>
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>{filtered.length} total</span>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
+            <span className="px-2 py-1">Page {page + 1} of {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Sheet */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent className="overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{editingTask ? "Edit Task" : "Add New Task"}</SheetTitle>
+            <SheetDescription>{editingTask ? "Update task details" : "Create a reusable task entry"}</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 mt-6">
+            <div>
+              <Label>Task Name <span className="text-destructive">*</span></Label>
+              <Input value={form.name || ""} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g., Pour Foundation" />
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Input value={form.category || ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="e.g., Structural, MEP, Finishes" />
+            </div>
+            <div>
+              <Label>Default Duration (days)</Label>
+              <Input type="number" min={1} value={form.default_duration ?? ""} onChange={e => setForm(f => ({ ...f, default_duration: e.target.value ? Number(e.target.value) : null }))} placeholder="e.g., 5" />
+            </div>
+            <div>
+              <Label>Default Trade / Specialty</Label>
+              <Input value={form.default_trade || ""} onChange={e => setForm(f => ({ ...f, default_trade: e.target.value }))} placeholder="e.g., Concrete, Electrical" />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea value={form.description || ""} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Standard scope description" rows={3} />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={form.status || "active"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full" onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingTask ? "Update Task" : "Create Task"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} task(s)?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. These tasks will be permanently removed.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
