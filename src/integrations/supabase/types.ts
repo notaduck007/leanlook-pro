@@ -92,6 +92,7 @@ export type Database = {
           company_id: string
           constraints: string | null
           custom_text: string | null
+          hidden: boolean
           id: string
           lookahead_id: string
           materials_needed: string | null
@@ -107,6 +108,7 @@ export type Database = {
           company_id: string
           constraints?: string | null
           custom_text?: string | null
+          hidden?: boolean
           id?: string
           lookahead_id: string
           materials_needed?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           company_id?: string
           constraints?: string | null
           custom_text?: string | null
+          hidden?: boolean
           id?: string
           lookahead_id?: string
           materials_needed?: string | null
