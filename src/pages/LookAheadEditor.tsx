@@ -1284,11 +1284,13 @@ export default function LookAheadEditor() {
                           onDeleteLine={handleDeleteLine}
                           onNameChange={handleNameChange}
                           onAddSubtask={handleAddSubtask}
+                          onToggleHidden={handleToggleHidden}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
                           comparisonData={showComparison ? comparisonData : undefined}
                           masterTasks={masterTasks}
+                          showHidden={showHidden}
                         />
                       ))}
                     </SortableContext>
