@@ -162,6 +162,7 @@ export default function LookAheadEditor() {
         status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
         sort_order: l.sort_order || 0,
         parent_line_id: (l as any).parent_line_id || null,
+        hidden: (l as any).hidden || false,
       }));
 
       setLines(mappedLines);
