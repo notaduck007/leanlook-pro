@@ -275,45 +275,82 @@ export default function NewLookAhead() {
     // Insert carry-over tasks
     const selectedCarryOver = carryOverTasks.filter((t) => t.selected);
     if (selectedCarryOver.length > 0) {
-      const existingTaskIds = new Set<string>();
-      // Get already inserted lines to avoid duplicates
+      const existingTaskIdMap = new Map<string, string>();
+      // Get already inserted lines to check for duplicates
       const { data: existingLines } = await supabase
         .from("lookahead_lines")
-        .select("task_id")
+        .select("id, task_id")
         .eq("lookahead_id", la.id);
-      (existingLines || []).forEach((l) => { if (l.task_id) existingTaskIds.add(l.task_id); });
+      (existingLines || []).forEach((l) => { if (l.task_id) existingTaskIdMap.set(l.task_id, l.id); });
 
-      const carryInserts = selectedCarryOver
-        .filter((t) => !t.task_id || !existingTaskIds.has(t.task_id))
-        .map((t, i) => ({
-          lookahead_id: la.id,
-          company_id: profile.company_id,
-          task_id: t.task_id,
-          custom_text: t.custom_text,
-          assigned_trade: t.assigned_trade,
-          materials_needed: t.materials_needed,
-          constraints: t.constraints,
-          notes: `Carried over: ${t.notes || ""}`.trim(),
-          sort_order: 1000 + i,
-          status_per_day: (() => {
-            // Carry over statuses from previous lookahead that fall within the new 2-week window
-            const newStart = parseISO(weekStart);
-            const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
-            const carried: Record<string, string> = {};
-            for (const d of newDates) {
-              if (t.status_per_day[d]) {
-                carried[d] = t.status_per_day[d];
-              }
-            }
-            return carried;
-          })(),
-          percent_complete: t.percent_complete,
-          expected_completion_date: t.expected_completion_date,
-        }));
+      // Separate into new inserts vs updates for existing schedule-pulled lines
+      const carryInserts: any[] = [];
+      const carryUpdates: { lineId: string; data: any }[] = [];
+
+      for (const t of selectedCarryOver) {
+        const newStart = parseISO(weekStart);
+        const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
+        const carriedStatus: Record<string, string> = {};
+        for (const d of newDates) {
+          if (t.status_per_day[d]) {
+            carriedStatus[d] = t.status_per_day[d];
+          }
+        }
+
+        if (t.task_id && existingTaskIdMap.has(t.task_id)) {
+          // Task already exists from schedule pull — update with progress details and statuses
+          const existingLineId = existingTaskIdMap.get(t.task_id)!;
+          carryUpdates.push({
+            lineId: existingLineId,
+            data: {
+              percent_complete: t.percent_complete,
+              expected_completion_date: t.expected_completion_date,
+              notes: t.notes ? `Carried over: ${t.notes}`.trim() : null,
+              // Merge carried statuses with existing (carried statuses take priority for overlapping dates)
+              status_per_day: carriedStatus,
+            },
+          });
+        } else {
+          carryInserts.push({
+            lookahead_id: la.id,
+            company_id: profile.company_id,
+            task_id: t.task_id,
+            custom_text: t.custom_text,
+            assigned_trade: t.assigned_trade,
+            materials_needed: t.materials_needed,
+            constraints: t.constraints,
+            notes: `Carried over: ${t.notes || ""}`.trim(),
+            sort_order: 1000 + carryInserts.length,
+            status_per_day: carriedStatus,
+            percent_complete: t.percent_complete,
+            expected_completion_date: t.expected_completion_date,
+          });
+        }
+      }
+
+      // Update existing lines with progress details from previous lookahead
+      for (const upd of carryUpdates) {
+        // First get existing status_per_day to merge
+        const existing = existingLines?.find((l) => l.id === upd.lineId);
+        const { data: fullLine } = await supabase
+          .from("lookahead_lines")
+          .select("status_per_day")
+          .eq("id", upd.lineId)
+          .single();
+        const mergedStatus = { ...((fullLine?.status_per_day as Record<string, string>) || {}), ...upd.data.status_per_day };
+        await supabase
+          .from("lookahead_lines")
+          .update({ ...upd.data, status_per_day: mergedStatus })
+          .eq("id", upd.lineId);
+      }
 
       if (carryInserts.length > 0) {
         await supabase.from("lookahead_lines").insert(carryInserts);
-        toast({ title: `Carried over ${carryInserts.length} task(s) from last week` });
+      }
+
+      const totalCarried = carryInserts.length + carryUpdates.length;
+      if (totalCarried > 0) {
+        toast({ title: `Carried over ${totalCarried} task(s) from last week` });
       }
     }
 
