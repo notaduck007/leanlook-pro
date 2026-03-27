@@ -92,12 +92,14 @@ export type Database = {
           company_id: string
           constraints: string | null
           custom_text: string | null
+          expected_completion_date: string | null
           hidden: boolean
           id: string
           lookahead_id: string
           materials_needed: string | null
           notes: string | null
           parent_line_id: string | null
+          percent_complete: number | null
           photos: string[] | null
           sort_order: number | null
           status_per_day: Json | null
@@ -108,12 +110,14 @@ export type Database = {
           company_id: string
           constraints?: string | null
           custom_text?: string | null
+          expected_completion_date?: string | null
           hidden?: boolean
           id?: string
           lookahead_id: string
           materials_needed?: string | null
           notes?: string | null
           parent_line_id?: string | null
+          percent_complete?: number | null
           photos?: string[] | null
           sort_order?: number | null
           status_per_day?: Json | null
@@ -124,12 +128,14 @@ export type Database = {
           company_id?: string
           constraints?: string | null
           custom_text?: string | null
+          expected_completion_date?: string | null
           hidden?: boolean
           id?: string
           lookahead_id?: string
           materials_needed?: string | null
           notes?: string | null
           parent_line_id?: string | null
+          percent_complete?: number | null
           photos?: string[] | null
           sort_order?: number | null
           status_per_day?: Json | null
