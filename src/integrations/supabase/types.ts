@@ -89,6 +89,7 @@ export type Database = {
       lookahead_lines: {
         Row: {
           assigned_trade: string | null
+          carry_over_data: Json | null
           company_id: string
           constraints: string | null
           custom_text: string | null
@@ -107,6 +108,7 @@ export type Database = {
         }
         Insert: {
           assigned_trade?: string | null
+          carry_over_data?: Json | null
           company_id: string
           constraints?: string | null
           custom_text?: string | null
@@ -125,6 +127,7 @@ export type Database = {
         }
         Update: {
           assigned_trade?: string | null
+          carry_over_data?: Json | null
           company_id?: string
           constraints?: string | null
           custom_text?: string | null

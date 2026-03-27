@@ -1,0 +1,2 @@
+ALTER TABLE public.lookahead_lines ADD COLUMN carry_over_data jsonb DEFAULT null;
+COMMENT ON COLUMN public.lookahead_lines.carry_over_data IS 'Stores progress context from the previous look-ahead when a task is carried over';
