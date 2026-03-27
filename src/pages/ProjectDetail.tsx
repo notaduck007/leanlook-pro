@@ -221,6 +221,24 @@ export default function ProjectDetail() {
                         <p className="text-xs text-muted-foreground">{new Date(v.uploaded_at).toLocaleDateString()}</p>
                       </div>
                     </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleDownloadVersion(v.file_url)}>
+                          <Download className="mr-2 h-4 w-4" /> Download
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { setEditingVersion(v); setEditVersionNumber(String(v.version_number)); }}>
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => setDeleteVersionId(v.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ))}
               </div>
