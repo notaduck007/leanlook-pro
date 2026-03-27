@@ -1015,7 +1015,7 @@ export default function LookAheadEditor() {
           <Button variant="outline" size="sm" disabled={generatingPDF} className="hidden md:inline-flex" onClick={async () => {
               setGeneratingPDF(true);
               try {
-                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, showComparison ? comparisonData : null);
+                await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, null);
               } finally {
                 setGeneratingPDF(false);
               }
