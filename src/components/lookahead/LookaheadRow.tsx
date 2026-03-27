@@ -339,6 +339,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onNameChange={onNameChange}
           onAddSubtask={onAddSubtask}
           onToggleHidden={onToggleHidden}
+          onPercentChange={onPercentChange}
+          onExpectedDateChange={onExpectedDateChange}
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
