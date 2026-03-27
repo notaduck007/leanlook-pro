@@ -27,6 +27,20 @@ interface CarryOverTask {
   expected_completion_date: string | null;
   status_per_day: Record<string, string>;
   selected: boolean;
+  subtasks: CarryOverSubtask[];
+}
+
+interface CarryOverSubtask {
+  id: string;
+  custom_text: string | null;
+  task_id: string | null;
+  assigned_trade: string | null;
+  materials_needed: string | null;
+  constraints: string | null;
+  notes: string | null;
+  percent_complete: number;
+  expected_completion_date: string | null;
+  status_per_day: Record<string, string>;
 }
 
 export default function NewLookAhead() {
