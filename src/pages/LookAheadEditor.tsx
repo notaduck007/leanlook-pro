@@ -1143,7 +1143,24 @@ export default function LookAheadEditor() {
           </div>
         </div>
       )}
-
+      {/* Carry-Over Summary Bar */}
+      {(() => {
+        const carriedLines = lines.filter(l => l.isCarryOver || l.carry_over_data);
+        const carriedParents = carriedLines.filter(l => !l.parent_line_id);
+        const carriedChildren = carriedLines.filter(l => l.parent_line_id);
+        const newTaskCount = lines.filter(l => !l.parent_line_id && !l.isCarryOver && !l.carry_over_data).length;
+        if (carriedLines.length === 0) return null;
+        return (
+          <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 flex items-center gap-2 text-sm">
+            <RotateCcw className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-amber-800 dark:text-amber-300">
+              ↩ {carriedParents.length + carriedChildren.length} tasks carried over
+              {carriedChildren.length > 0 && ` (${carriedParents.length} parent${carriedParents.length !== 1 ? "s" : ""} with ${carriedChildren.length} subtask${carriedChildren.length !== 1 ? "s" : ""})`}
+              {" · "}{newTaskCount} new task{newTaskCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Filter + Legend */}
       <div className="flex items-center justify-between flex-wrap gap-3">
