@@ -837,7 +837,7 @@ export default function LookAheadEditor() {
           constraints: l.constraints,
           notes: l.notes,
           photos: [],
-          status_per_day: l.status_per_day as Record<string, string> || {},
+        status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
           sort_order: l.sort_order || 0,
           percent_complete: l.percent_complete || 0,
           expected_completion_date: l.expected_completion_date || null,
