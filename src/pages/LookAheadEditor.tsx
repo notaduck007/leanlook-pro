@@ -1445,12 +1445,14 @@ export default function LookAheadEditor() {
                           onToggleHidden={handleToggleHidden}
                           onPercentChange={handlePercentChange}
                           onExpectedDateChange={handleExpectedDateChange}
+                          onVarianceChange={handleVarianceChange}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
-                          
                           masterTasks={masterTasks}
                           showHidden={showHidden}
+                          variancePopoverLineDate={variancePopoverKey}
+                          onVariancePopoverChange={setVariancePopoverKey}
                         />
                       ))}
                     </SortableContext>
