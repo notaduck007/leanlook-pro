@@ -174,6 +174,11 @@ export default function ProjectDetail() {
         </div>
       </div>
 
+      {/* Lean Tracking Analytics */}
+      {id && (
+        <LeanTrackingAnalytics projectId={id} ppcGoal={project.ppc_goal ?? 80} />
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Upload */}
         <Card className="lg:col-span-1">
