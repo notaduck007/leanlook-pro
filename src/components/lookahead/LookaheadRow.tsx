@@ -41,7 +41,7 @@ interface LookaheadRowProps {
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
-  comparisonData?: ComparisonData | null;
+  
   masterTasks?: MasterTaskRecord[];
   showHidden?: boolean;
 }
