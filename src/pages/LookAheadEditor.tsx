@@ -979,15 +979,6 @@ export default function LookAheadEditor() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleSmartFill}>
-                      <Sparkles className="mr-2 h-4 w-4" /> Smart Fill
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handlePullFromLastWeek}>
-                      <Copy className="mr-2 h-4 w-4" /> Pull Last Week
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleAddCustomLine}>
-                      <Plus className="mr-2 h-4 w-4" /> Add Line
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
                       <Save className="mr-2 h-4 w-4" /> Save Now
                     </DropdownMenuItem>
