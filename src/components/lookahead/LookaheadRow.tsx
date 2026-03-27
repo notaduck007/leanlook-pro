@@ -51,6 +51,8 @@ export interface LookaheadLineData {
   expected_completion_date?: string | null;
   isCarryOver?: boolean;
   carry_over_data?: CarryOverDataInfo | null;
+  variance_reason?: string | null;
+  variance_note?: string | null;
 }
 
 interface LookaheadRowProps {
