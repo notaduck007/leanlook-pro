@@ -824,16 +824,8 @@ export default function LookAheadEditor() {
     const wsDate = parseISO(lookAhead.week_start_date);
     const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(wsDate, j), "yyyy-MM-dd"));
 
-    const buildPlannedStatus = () => {
-      const status: Record<string, string> = {};
-      for (const d of newDates) {
-        const dayOfWeek = parseISO(d).getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-          status[d] = "planned";
-        }
-      }
-      return status;
-    };
+    // Carry-over tasks start with empty status
+    const buildEmptyStatus = (): Record<string, string> => ({});
 
     // Insert parents first (filter out already existing)
     const newParents = carryParents.filter(l => !l.task_id || !existingIdMap.has(l.task_id));
@@ -874,7 +866,7 @@ export default function LookAheadEditor() {
 
     // Insert new parents
     if (newParents.length > 0) {
-      const plannedStatus = buildPlannedStatus();
+      const plannedStatus = buildEmptyStatus();
       const parentInserts = newParents.map((pl, i) => {
         const prog = lineProgress.get(pl.id)!;
         return {
@@ -911,7 +903,7 @@ export default function LookAheadEditor() {
 
     // Insert children with remapped parent_line_id
     if (carryChildren.length > 0) {
-      const plannedStatus = buildPlannedStatus();
+      const plannedStatus = buildEmptyStatus();
       const childInserts = carryChildren
         .filter(c => oldToNewParentId.has(c.parent_line_id!))
         .map((c, i) => {

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { Check, X, Circle, ArrowRight, Percent } from "lucide-react";
 import {
   Tooltip,
   TooltipTrigger,
@@ -9,7 +10,7 @@ import {
 
 export type DayStatus = "Y" | "N" | "50" | "planned" | "progress" | "";
 
-const STATUS_CYCLE: DayStatus[] = ["", "planned", "Y", "N", "50", "progress"];
+const STATUS_CYCLE: DayStatus[] = ["", "planned", "progress", "Y", "N", "50"];
 
 const KEY_STATUS_MAP: Record<string, DayStatus> = {
   y: "Y",
@@ -42,18 +43,30 @@ interface StatusCellProps {
   tooltipData?: StatusCellTooltipData;
 }
 
-const STATUS_INFO: Record<string, { label: string; emoji: string; colorClass: string }> = {
-  Y: { label: "Complete (Y)", emoji: "🟢", colorClass: "text-green-600 dark:text-green-400" },
-  N: { label: "Not Done (N)", emoji: "🔴", colorClass: "text-red-600 dark:text-red-400" },
-  "50": { label: "50% Complete", emoji: "🟠", colorClass: "text-yellow-600 dark:text-yellow-400" },
-  planned: { label: "Planned", emoji: "🟡", colorClass: "text-blue-600 dark:text-blue-400" },
-  progress: { label: "In Progress", emoji: "🔵", colorClass: "text-orange-600 dark:text-orange-400" },
-  "": { label: "No Status", emoji: "⬜", colorClass: "text-muted-foreground" },
+const STATUS_META: Record<string, { label: string; colorClass: string }> = {
+  Y: { label: "Complete", colorClass: "text-emerald-600 dark:text-emerald-400" },
+  N: { label: "Not Completed", colorClass: "text-red-500 dark:text-red-400" },
+  "50": { label: "50% Complete", colorClass: "text-yellow-600 dark:text-yellow-400" },
+  planned: { label: "Planned", colorClass: "text-blue-500 dark:text-blue-400" },
+  progress: { label: "In Progress", colorClass: "text-amber-500 dark:text-amber-400" },
+  "": { label: "No status", colorClass: "text-muted-foreground" },
 };
 
 function truncate(text: string, max: number) {
   if (!text) return "";
   return text.length > max ? text.slice(0, max) + "..." : text;
+}
+
+function StatusIcon({ status }: { status: DayStatus }) {
+  const iconClass = "h-3.5 w-3.5";
+  switch (status) {
+    case "Y": return <Check className={cn(iconClass, "text-emerald-600 dark:text-emerald-400")} strokeWidth={3} />;
+    case "N": return <X className={cn(iconClass, "text-red-500 dark:text-red-400")} strokeWidth={3} />;
+    case "50": return <Percent className={cn(iconClass, "text-yellow-600 dark:text-yellow-400")} strokeWidth={2.5} />;
+    case "planned": return <Circle className={cn(iconClass, "text-blue-400 dark:text-blue-500")} strokeWidth={2} />;
+    case "progress": return <ArrowRight className={cn(iconClass, "text-amber-500 dark:text-amber-400")} strokeWidth={2.5} />;
+    default: return null;
+  }
 }
 
 export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate, percentComplete, expectedDate, date, tooltipData }: StatusCellProps) {
@@ -103,9 +116,8 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
     }
   };
 
-  const info = STATUS_INFO[status] || STATUS_INFO[""];
+  const meta = STATUS_META[status] || STATUS_META[""];
 
-  // Calculate progress from statusPerDay
   const progressStats = tooltipData?.statusPerDay ? (() => {
     const entries = Object.values(tooltipData.statusPerDay);
     const nonEmpty = entries.filter(s => s && s !== "");
@@ -118,7 +130,7 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
     : 0;
 
   const progressBarColor = progressPct >= 80
-    ? "bg-green-500"
+    ? "bg-emerald-500"
     : progressPct >= 50
     ? "bg-yellow-500"
     : "bg-red-500";
@@ -126,6 +138,8 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
   const formattedDate = date ? (() => {
     try { return format(parseISO(date), "EEEE, MMMM d, yyyy"); } catch { return date; }
   })() : null;
+
+  const titleText = status ? meta.label : "No status — click to set";
 
   const button = (
     <button
@@ -135,30 +149,33 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       disabled={readOnly}
+      title={titleText}
       className={cn(
-        "w-10 h-10 md:w-8 md:h-8 min-w-[48px] min-h-[48px] md:min-w-0 md:min-h-0 flex items-center justify-center rounded-md border text-xs font-bold transition-all select-none",
-        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-        "active:scale-90",
-        isWeekend && "bg-muted/50",
-        !readOnly && "hover:bg-accent cursor-pointer hover:shadow-sm",
+        "w-9 h-9 flex items-center justify-center rounded-md text-xs font-bold select-none touch-manipulation",
+        "transition-all duration-100",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+        "active:scale-95",
+        !readOnly && "hover:scale-105 hover:shadow-sm cursor-pointer",
         readOnly && "cursor-default",
-        status === "Y" && "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 shadow-green-200/50 dark:shadow-none",
-        status === "N" && "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700 shadow-red-200/50 dark:shadow-none",
-        status === "50" && "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700",
-        status === "planned" && "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700",
-        status === "progress" && "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700",
-        !status && "border-border"
+        // Empty
+        !status && "bg-gray-50 dark:bg-gray-900 border border-dashed border-gray-200 dark:border-gray-700",
+        // Planned
+        status === "planned" && "bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800",
+        // In Progress
+        status === "progress" && "bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800",
+        // Complete
+        status === "Y" && "bg-emerald-100 dark:bg-emerald-950 border border-emerald-300 dark:border-emerald-800",
+        // Not Done
+        status === "N" && "bg-red-100 dark:bg-red-950 border border-red-300 dark:border-red-800",
+        // 50%
+        status === "50" && "bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800",
+        isWeekend && !status && "bg-gray-100/50 dark:bg-gray-800/30",
       )}
     >
-      {status === "Y" && "✓"}
-      {status === "N" && "✕"}
-      {status === "50" && "%"}
-      {status === "planned" && "○"}
-      {status === "progress" && "→"}
+      <StatusIcon status={status} />
     </button>
   );
 
-  // If no tooltip data, render plain button
   if (!tooltipData && !date) return button;
 
   return (
@@ -168,18 +185,15 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={8} className="max-w-[280px] p-0">
         <div className="p-2.5 space-y-1.5">
-          {/* Date + Status */}
           {formattedDate && (
             <p className="text-[10px] text-muted-foreground">{formattedDate}</p>
           )}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs">{info.emoji}</span>
-            <span className={cn("text-xs font-semibold", info.colorClass)}>
-              {status ? info.label : "No status — click or press a key to set"}
+            <span className={cn("text-xs font-semibold", meta.colorClass)}>
+              {status ? meta.label : "No status — click or press a key to set"}
             </span>
           </div>
 
-          {/* Task context */}
           {tooltipData && (
             <div className="space-y-0.5 pt-1 border-t border-border/50">
               <p className="text-sm font-semibold truncate">{tooltipData.taskName}</p>
@@ -202,7 +216,6 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
             </div>
           )}
 
-          {/* Progress + percent/date */}
           <div className="space-y-1 pt-1 border-t border-border/50">
             {percentComplete !== undefined && percentComplete > 0 && (
               <p className="text-xs text-muted-foreground">{percentComplete}% complete</p>
