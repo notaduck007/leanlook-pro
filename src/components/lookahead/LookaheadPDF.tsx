@@ -56,16 +56,9 @@ function buildHierarchicalRows(
   });
 
   const rows: PDFRow[] = [];
-  const lineKey = (taskId: string | null, customText: string | null) => taskId || customText || "";
 
   for (const parent of parentLines) {
-    let taskName = parent.task_name || parent.custom_text || "";
-    if (comparisonData) {
-      const key = lineKey(parent.task_id, parent.custom_text);
-      if (key && comparisonData.newLineKeys.has(key)) {
-        taskName = "[NEW] " + taskName;
-      }
-    }
+    const taskName = parent.task_name || parent.custom_text || "";
 
     const parentRow: PDFRow = {
       task: taskName,
