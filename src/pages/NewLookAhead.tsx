@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CalendarDays, Loader2 } from "lucide-react";
 import { format, startOfWeek, addWeeks, addDays, parseISO, isBefore, isAfter } from "date-fns";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 
