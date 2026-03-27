@@ -1276,6 +1276,8 @@ export default function LookAheadEditor() {
                           onNameChange={handleNameChange}
                           onAddSubtask={handleAddSubtask}
                           onToggleHidden={handleToggleHidden}
+                          onPercentChange={handlePercentChange}
+                          onExpectedDateChange={handleExpectedDateChange}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
