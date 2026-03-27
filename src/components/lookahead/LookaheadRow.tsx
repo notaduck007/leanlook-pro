@@ -35,6 +35,7 @@ export interface LookaheadLineData {
 interface LookaheadRowProps {
   line: LookaheadLineData;
   dates: string[];
+  todayStr?: string;
   onStatusChange: (lineId: string, date: string, status: DayStatus) => void;
   onFieldChange: (lineId: string, field: string, value: string) => void;
   onDeleteLine?: (lineId: string) => void;
