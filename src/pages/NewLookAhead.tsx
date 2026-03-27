@@ -144,9 +144,13 @@ export default function NewLookAhead() {
         taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
       }
 
-      // Find lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
+      // Separate parent lines and child lines
+      const parentLines = prevLines.filter((l) => !l.parent_line_id);
+      const childLines = prevLines.filter((l) => l.parent_line_id);
+
+      // Find parent lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
       const candidates: CarryOverTask[] = [];
-      for (const line of prevLines) {
+      for (const line of parentLines) {
         const statusPerDay = (line.status_per_day as Record<string, string>) || {};
         const hasWeek2NonComplete = week2Dates.some((d) => {
           const s = statusPerDay[d] as DayStatus;
@@ -158,6 +162,22 @@ export default function NewLookAhead() {
         const exceedsNewWindow = expectedDate && newEndDate ? isAfter(expectedDate, newEndDate) : false;
 
         if (hasWeek2NonComplete || exceedsNewWindow) {
+          // Collect subtasks for this parent
+          const subtasks: CarryOverSubtask[] = childLines
+            .filter((c) => c.parent_line_id === line.id)
+            .map((c) => ({
+              id: c.id,
+              custom_text: c.custom_text,
+              task_id: c.task_id,
+              assigned_trade: c.assigned_trade,
+              materials_needed: c.materials_needed,
+              constraints: c.constraints,
+              notes: c.notes,
+              percent_complete: c.percent_complete || 0,
+              expected_completion_date: c.expected_completion_date || null,
+              status_per_day: (c.status_per_day as Record<string, string>) || {},
+            }));
+
           candidates.push({
             id: line.id,
             task_name: line.task_id ? taskMap[line.task_id]?.name || "Unknown" : line.custom_text || "Custom Task",
@@ -171,6 +191,7 @@ export default function NewLookAhead() {
             expected_completion_date: line.expected_completion_date || null,
             status_per_day: statusPerDay,
             selected: true,
+            subtasks,
           });
         }
       }
