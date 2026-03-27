@@ -165,6 +165,8 @@ export default function LookAheadEditor() {
         expected_completion_date: (l as any).expected_completion_date || null,
         isCarryOver: !!(l as any).carry_over_data || (l.notes || "").toLowerCase().startsWith("carried over"),
         carry_over_data: (l as any).carry_over_data || null,
+        variance_reason: (l as any).variance_reason || null,
+        variance_note: (l as any).variance_note || null,
       }));
 
       setLines(mappedLines);
