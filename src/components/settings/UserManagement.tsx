@@ -77,6 +77,11 @@ export function UserManagement() {
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [inviting, setInviting] = useState(false);
 
+  const fetchCompanies = useCallback(async () => {
+    const { data } = await supabase.from("companies").select("id, name");
+    setCompanies(data || []);
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     if (!profile?.company_id) return;
     setLoading(true);
@@ -112,6 +117,7 @@ export function UserManagement() {
   }, [profile?.company_id]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
 
   // Sort & filter
   const filtered = users
