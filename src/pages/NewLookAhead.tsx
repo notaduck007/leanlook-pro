@@ -149,6 +149,7 @@ export default function NewLookAhead() {
       const childLines = prevLines.filter((l) => l.parent_line_id);
 
       // Find parent lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
+      // Also qualify parents if ANY of their subtasks have non-complete statuses
       const candidates: CarryOverTask[] = [];
       for (const line of parentLines) {
         const statusPerDay = (line.status_per_day as Record<string, string>) || {};
@@ -161,10 +162,19 @@ export default function NewLookAhead() {
         const expectedDate = line.expected_completion_date ? parseISO(line.expected_completion_date) : null;
         const exceedsNewWindow = expectedDate && newEndDate ? isAfter(expectedDate, newEndDate) : false;
 
-        if (hasWeek2NonComplete || exceedsNewWindow) {
-          // Collect subtasks for this parent
-          const subtasks: CarryOverSubtask[] = childLines
-            .filter((c) => c.parent_line_id === line.id)
+        // Check if any subtask has non-complete statuses in week 2
+        const lineChildren = childLines.filter((c) => c.parent_line_id === line.id);
+        const hasChildNonComplete = lineChildren.some((child) => {
+          const childStatus = (child.status_per_day as Record<string, string>) || {};
+          return week2Dates.some((d) => {
+            const s = childStatus[d] as DayStatus;
+            return s === "N" || s === "50" || s === "planned" || s === "progress";
+          });
+        });
+
+        if (hasWeek2NonComplete || exceedsNewWindow || hasChildNonComplete) {
+          // Collect ALL subtasks for this parent (not just non-complete ones)
+          const subtasks: CarryOverSubtask[] = lineChildren
             .map((c) => ({
               id: c.id,
               custom_text: c.custom_text,
