@@ -311,6 +311,14 @@ export default function LookAheadEditor() {
     markDirty();
   };
 
+  const handleVarianceChange = (lineId: string, reason: string | null, note: string | null) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, variance_reason: reason, variance_note: note } : l))
+    );
+    supabase.from("lookahead_lines").update({ variance_reason: reason, variance_note: note } as any).eq("id", lineId);
+    markDirty();
+  };
+
   const handleNameChange = async (lineId: string, newName: string) => {
     const line = lines.find((l) => l.id === lineId);
     if (!line) return;
