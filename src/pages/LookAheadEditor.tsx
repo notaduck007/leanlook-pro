@@ -866,7 +866,7 @@ export default function LookAheadEditor() {
 
     // Insert new parents
     if (newParents.length > 0) {
-      const plannedStatus = buildPlannedStatus();
+      const plannedStatus = buildEmptyStatus();
       const parentInserts = newParents.map((pl, i) => {
         const prog = lineProgress.get(pl.id)!;
         return {
@@ -903,7 +903,7 @@ export default function LookAheadEditor() {
 
     // Insert children with remapped parent_line_id
     if (carryChildren.length > 0) {
-      const plannedStatus = buildPlannedStatus();
+      const plannedStatus = buildEmptyStatus();
       const childInserts = carryChildren
         .filter(c => oldToNewParentId.has(c.parent_line_id!))
         .map((c, i) => {

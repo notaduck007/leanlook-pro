@@ -426,7 +426,7 @@ export default function NewLookAhead() {
       const carryUpdates: { lineId: string; data: any; subtasks: CarryOverSubtask[]; parentName: string }[] = [];
 
       for (const t of selectedCarryOver) {
-        const plannedStatus = buildPlannedStatus();
+        const plannedStatus = buildEmptyStatus();
         const coData = buildCarryOverData(t);
 
         if (t.task_id && existingTaskIdMap.has(t.task_id)) {
@@ -472,7 +472,7 @@ export default function NewLookAhead() {
 
         // Insert subtasks for updated parent
         if (upd.subtasks.length > 0) {
-          const plannedStatus = buildPlannedStatus();
+          const plannedStatus = buildEmptyStatus();
           const subtaskRows = upd.subtasks.map((st, si) => ({
             lookahead_id: la.id,
             company_id: profile.company_id,
@@ -511,7 +511,7 @@ export default function NewLookAhead() {
         // Insert subtasks for each newly inserted parent with re-linked parent_line_id
         if (insertedParents) {
           const allSubtaskRows: any[] = [];
-          const plannedStatus = buildPlannedStatus();
+          const plannedStatus = buildEmptyStatus();
           for (let i = 0; i < insertedParents.length; i++) {
             const parentId = insertedParents[i].id;
             const { subs, parentName } = subtasksPerInsert[i];
