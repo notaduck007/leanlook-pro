@@ -1,6 +1,6 @@
 import { LookaheadLineData } from "./LookaheadRow";
 import { DayStatus } from "./StatusCell";
-import { ComparisonData } from "./WeekComparison";
+
 import { format, parseISO } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
