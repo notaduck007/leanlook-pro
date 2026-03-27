@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "l
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
+
 import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
 import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/MasterAutocomplete";
 import { MasterTaskRecord } from "@/hooks/useMasterTasks";
@@ -41,12 +41,12 @@ interface LookaheadRowProps {
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
-  comparisonData?: ComparisonData | null;
+  
   masterTasks?: MasterTaskRecord[];
   showHidden?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, readOnly, onRegisterRef, onNavigate, comparisonData, masterTasks = [], showHidden }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const depth = line.depth || 0;
   const isSubtask = !!line.parent_line_id;
@@ -98,10 +98,6 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     return { id: data.id, primaryText: data.name, secondaryText: data.category || undefined };
   };
 
-  const isNewTask = comparisonData && (() => {
-    const key = line.task_id || line.custom_text || "";
-    return key ? comparisonData.newLineKeys.has(key) : false;
-  })();
 
   const isHidden = line.hidden === true;
 
@@ -115,7 +111,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
           isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
-          isNewTask && "border-l-2 border-l-blue-500",
+          
           isHidden && "opacity-40"
         )}
       >
@@ -161,9 +157,6 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                   className={cn(line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}
                 />
               </div>
-            )}
-            {comparisonData && (
-              <ComparisonIndicator lineTaskId={line.task_id} lineCustomText={line.custom_text} comparisonData={comparisonData} />
             )}
             {!readOnly && !isSubtask && onAddSubtask && (
               <button
@@ -325,7 +318,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
-          comparisonData={comparisonData}
+          
           masterTasks={masterTasks}
           showHidden={showHidden}
         />
