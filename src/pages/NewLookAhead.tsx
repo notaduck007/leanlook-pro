@@ -397,17 +397,8 @@ export default function NewLookAhead() {
       const newStart = parseISO(weekStart);
       const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
 
-      // Build planned status for new period (weekdays only)
-      const buildPlannedStatus = () => {
-        const status: Record<string, string> = {};
-        for (const d of newDates) {
-          const dayOfWeek = parseISO(d).getDay();
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            status[d] = "planned";
-          }
-        }
-        return status;
-      };
+      // Carry-over tasks start with empty status — users set planned manually
+      const buildEmptyStatus = (): Record<string, string> => ({});
 
       const buildCarryOverData = (t: CarryOverTask) => ({
         previous_lookahead_id: previousLookahead.id,
