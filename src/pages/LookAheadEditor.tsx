@@ -160,6 +160,8 @@ export default function LookAheadEditor() {
         sort_order: l.sort_order || 0,
         parent_line_id: (l as any).parent_line_id || null,
         hidden: (l as any).hidden || false,
+        percent_complete: (l as any).percent_complete || 0,
+        expected_completion_date: (l as any).expected_completion_date || null,
       }));
 
       setLines(mappedLines);
