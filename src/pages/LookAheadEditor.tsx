@@ -50,9 +50,6 @@ export default function LookAheadEditor() {
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState("");
   const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [showComparison, setShowComparison] = useState(false);
-  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
-  const [loadingComparison, setLoadingComparison] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
