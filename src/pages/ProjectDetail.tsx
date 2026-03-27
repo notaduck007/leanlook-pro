@@ -395,6 +395,11 @@ export default function ProjectDetail() {
         </Card>
       )}
 
+      {/* Lean Tracking Analytics */}
+      {id && (
+        <LeanTrackingAnalytics projectId={id} ppcGoal={project.ppc_goal ?? 80} />
+      )}
+
       {/* Edit Version Dialog */}
       <Dialog open={!!editingVersion} onOpenChange={(open) => !open && setEditingVersion(null)}>
         <DialogContent>
