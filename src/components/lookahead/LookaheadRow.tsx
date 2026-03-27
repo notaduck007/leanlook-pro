@@ -30,6 +30,7 @@ export interface LookaheadLineData {
   hidden?: boolean;
   percent_complete?: number;
   expected_completion_date?: string | null;
+  isCarryOver?: boolean;
 }
 
 interface LookaheadRowProps {
