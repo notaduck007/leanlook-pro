@@ -27,6 +27,9 @@ export default function ProjectDetail() {
   const [lookAheads, setLookAheads] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [editingVersion, setEditingVersion] = useState<any>(null);
+  const [editVersionNumber, setEditVersionNumber] = useState("");
+  const [deleteVersionId, setDeleteVersionId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
