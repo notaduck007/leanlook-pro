@@ -153,6 +153,7 @@ export default function NewLookAhead() {
             notes: line.notes,
             percent_complete: line.percent_complete || 0,
             expected_completion_date: line.expected_completion_date || null,
+            status_per_day: statusPerDay,
             selected: true,
           });
         }
