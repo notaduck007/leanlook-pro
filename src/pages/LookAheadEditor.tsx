@@ -285,6 +285,22 @@ export default function LookAheadEditor() {
     markDirty();
   };
 
+  const handlePercentChange = (lineId: string, value: number) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, percent_complete: value } : l))
+    );
+    supabase.from("lookahead_lines").update({ percent_complete: value }).eq("id", lineId);
+    markDirty();
+  };
+
+  const handleExpectedDateChange = (lineId: string, date: string | null) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, expected_completion_date: date } : l))
+    );
+    supabase.from("lookahead_lines").update({ expected_completion_date: date }).eq("id", lineId);
+    markDirty();
+  };
+
   const handleNameChange = async (lineId: string, newName: string) => {
     const line = lines.find((l) => l.id === lineId);
     if (!line) return;
