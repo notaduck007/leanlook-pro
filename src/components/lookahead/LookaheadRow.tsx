@@ -40,6 +40,8 @@ interface LookaheadRowProps {
   onNameChange?: (lineId: string, newName: string) => void;
   onAddSubtask?: (parentLineId: string) => void;
   onToggleHidden?: (lineId: string, hidden: boolean) => void;
+  onPercentChange?: (lineId: string, value: number) => void;
+  onExpectedDateChange?: (lineId: string, date: string | null) => void;
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
