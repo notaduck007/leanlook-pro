@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeanTrackingAnalytics } from "@/components/project/LeanTrackingAnalytics";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -392,6 +393,11 @@ export default function ProjectDetail() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Lean Tracking Analytics */}
+      {id && (
+        <LeanTrackingAnalytics projectId={id} ppcGoal={project.ppc_goal ?? 80} />
       )}
 
       {/* Edit Version Dialog */}
