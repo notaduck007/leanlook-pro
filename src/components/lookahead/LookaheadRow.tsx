@@ -27,6 +27,8 @@ export interface LookaheadLineData {
   children?: LookaheadLineData[];
   parent_line_id?: string | null;
   hidden?: boolean;
+  percent_complete?: number;
+  expected_completion_date?: string | null;
 }
 
 interface LookaheadRowProps {
