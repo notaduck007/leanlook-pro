@@ -35,6 +35,7 @@ export interface LookaheadLineData {
 interface LookaheadRowProps {
   line: LookaheadLineData;
   dates: string[];
+  todayStr?: string;
   onStatusChange: (lineId: string, date: string, status: DayStatus) => void;
   onFieldChange: (lineId: string, field: string, value: string) => void;
   onDeleteLine?: (lineId: string) => void;
@@ -51,7 +52,7 @@ interface LookaheadRowProps {
   showHidden?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [popoverLineId, setPopoverLineId] = useState<string | null>(null);
   const depth = line.depth || 0;
@@ -192,6 +193,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
         {/* Daily Status Cells */}
         {dates.map((date, dateIndex) => {
           const isWeekend = [0, 6].includes(new Date(date + "T00:00:00").getDay());
+          const isToday = date === todayStr;
           const cellKey = `${line.id}-${date}`;
 
           let cellBg = "";
@@ -230,7 +232,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
               {dateIndex === 7 && (
                 <td className="w-2 min-w-[8px] bg-border/40" />
               )}
-              <td className={cn("py-1 px-0.5 text-center", cellBg)}>
+              <td className={cn("py-1 px-0.5 text-center", cellBg, isToday && "border-x-2 border-primary/40 bg-primary/5")}>
                 <StatusDetailPopover
                   open={popoverLineId === cellKey}
                   onOpenChange={(open) => setPopoverLineId(open ? cellKey : null)}
@@ -333,6 +335,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           key={child.id}
           line={child}
           dates={dates}
+          todayStr={todayStr}
           onStatusChange={onStatusChange}
           onFieldChange={onFieldChange}
           onDeleteLine={onDeleteLine}

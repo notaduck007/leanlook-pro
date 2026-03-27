@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical, Download, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, addDays, parseISO, subWeeks, isBefore, isAfter, formatDistanceToNow } from "date-fns";
@@ -920,6 +921,9 @@ export default function LookAheadEditor() {
 
   const isOwner = lookAhead?.super_id === user?.id;
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+
+  // Today's date string for column highlighting
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const isRejected = lookAhead?.status === "rejected";
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
@@ -1254,16 +1258,24 @@ export default function LookAheadEditor() {
                     {dates.map((date, i) => {
                       const d = parseISO(date);
                       const isWeekend = [0, 6].includes(d.getDay());
+                      const isToday = date === todayStr;
                       return (
                         <React.Fragment key={date}>
                           {i === 7 && (
                             <th className="w-2 min-w-[8px] bg-border/40" />
                           )}
                           <th
-                            className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
-                              isWeekend ? "bg-muted/80" : ""
-                            }`}
+                            className={cn(
+                              "py-1 px-0.5 text-center font-medium text-[10px] leading-tight min-w-[36px]",
+                              isWeekend && "bg-muted/80",
+                              isToday
+                                ? "bg-primary/15 text-primary border-x-2 border-t-2 border-primary/40 font-bold"
+                                : "text-muted-foreground"
+                            )}
                           >
+                            {isToday && (
+                              <div className="text-[8px] uppercase tracking-widest font-black text-primary mb-0.5">Today</div>
+                            )}
                             <div>{format(d, "EEE")}</div>
                             <div>{format(d, "M/d")}</div>
                           </th>
@@ -1280,8 +1292,9 @@ export default function LookAheadEditor() {
                       <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
                         Daily PPC
                       </th>
-                      {dates.map((date, i) => {
+                    {dates.map((date, i) => {
                         const day = ppcStats.perDay[date];
+                        const isToday = date === todayStr;
                         let dotClass = "bg-muted-foreground/20";
                         if (day && day.total > 0) {
                           const ratio = day.completed / day.total;
@@ -1294,7 +1307,7 @@ export default function LookAheadEditor() {
                             {i === 7 && (
                               <th className="w-2 min-w-[8px] bg-border/40" />
                             )}
-                            <th className="py-0.5 px-0.5 text-center">
+                            <th className={cn("py-0.5 px-0.5 text-center", isToday && "border-x-2 border-primary/40 bg-primary/5")}>
                               <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
                             </th>
                           </React.Fragment>
@@ -1318,6 +1331,7 @@ export default function LookAheadEditor() {
                           key={line.id}
                           line={line}
                           dates={dates}
+                          todayStr={todayStr}
                           onStatusChange={handleStatusChange}
                           onFieldChange={handleFieldChange}
                           onDeleteLine={handleDeleteLine}
@@ -1337,6 +1351,41 @@ export default function LookAheadEditor() {
                     </SortableContext>
                   )}
                 </tbody>
+                {/* Summary Footer Row */}
+                {lines.length > 0 && (
+                  <tfoot className="bg-muted/40 border-t-2 border-border">
+                    <tr>
+                      <td className="py-2 px-2 text-xs font-semibold text-muted-foreground sticky left-0 bg-muted/40 z-10" colSpan={2}>
+                        Daily Summary
+                      </td>
+                      {dates.map((date, i) => {
+                        const isToday = date === todayStr;
+                        const stats = { done: 0, total: 0 };
+                        lines.forEach((l) => {
+                          const s = l.status_per_day[date] as DayStatus;
+                          if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
+                            stats.total++;
+                            if (s === "Y") stats.done++;
+                          }
+                        });
+                        const ratio = stats.total > 0 ? stats.done / stats.total : -1;
+                        let textColor = "text-muted-foreground";
+                        if (ratio >= 1) textColor = "text-green-600 dark:text-green-400";
+                        else if (ratio >= 0.5) textColor = "text-yellow-600 dark:text-yellow-400";
+                        else if (ratio >= 0) textColor = "text-red-600 dark:text-red-400";
+                        return (
+                          <React.Fragment key={date}>
+                            {i === 7 && <td className="w-2 min-w-[8px] bg-border/40" />}
+                            <td className={cn("py-2 px-0.5 text-center text-[10px] font-bold", textColor, isToday && "border-x-2 border-primary/40 bg-primary/5")}>
+                              {stats.total > 0 ? `${stats.done}/${stats.total}` : "—"}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })}
+                      <td colSpan={3}></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </DndContext>
 
