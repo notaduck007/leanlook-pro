@@ -23,6 +23,7 @@ interface CarryOverTask {
   notes: string | null;
   percent_complete: number;
   expected_completion_date: string | null;
+  status_per_day: Record<string, string>;
   selected: boolean;
 }
 
