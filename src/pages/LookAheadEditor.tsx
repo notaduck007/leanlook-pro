@@ -163,6 +163,7 @@ export default function LookAheadEditor() {
         hidden: (l as any).hidden || false,
         percent_complete: (l as any).percent_complete || 0,
         expected_completion_date: (l as any).expected_completion_date || null,
+        isCarryOver: (l.notes || "").toLowerCase().startsWith("carried over"),
       }));
 
       setLines(mappedLines);
