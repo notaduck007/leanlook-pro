@@ -355,18 +355,49 @@ export default function NewLookAhead() {
             <p className="text-sm text-muted-foreground mb-1">Project</p>
             <p className="font-medium">{project.name}</p>
           </div>
+
+          {/* Recommended week highlight */}
+          {recommendedWeekStart && previousLookahead && (
+            <div className="rounded-lg border-2 border-success bg-success/10 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarDays className="h-4 w-4 text-success" />
+                <p className="text-sm font-semibold text-success">Recommended Start Date</p>
+              </div>
+              <p className="text-sm">
+                <span className="font-medium">
+                  {format(parseISO(recommendedWeekStart), "EEEE, MMM d, yyyy")}
+                </span>
+                {" "}— continues from previous planning week
+              </p>
+              {weekStart !== recommendedWeekStart && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 border-success text-success hover:bg-success/20"
+                  onClick={() => setWeekStart(recommendedWeekStart)}
+                >
+                  Use Recommended Date
+                </Button>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Week Starting</label>
             <input
               type="date"
               value={weekStart}
               onChange={(e) => setWeekStart(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                weekStart === recommendedWeekStart
+                  ? "border-success ring-success/30"
+                  : "border-input"
+              )}
             />
-            {previousLookahead && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Continues from previous look-ahead starting{" "}
-                {format(parseISO(previousLookahead.week_start_date), "MMM d, yyyy")}
+            {previousLookahead && weekStart !== recommendedWeekStart && (
+              <p className="text-xs text-warning mt-1">
+                ⚠ This differs from the recommended date based on the previous look-ahead.
               </p>
             )}
           </div>
@@ -379,10 +410,10 @@ export default function NewLookAhead() {
           {carryOverTasks.length > 0 && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
               <p className="text-sm font-medium">
-                {carryOverTasks.length} incomplete task(s) from last week's planning week available for carry-over.
+                {carryOverTasks.length} incomplete task(s) available for carry-over.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                You'll be able to select which tasks to bring forward when you create.
+                Includes tasks with non-complete statuses and tasks whose expected completion date extends beyond this window.
               </p>
             </div>
           )}
