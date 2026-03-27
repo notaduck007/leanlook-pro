@@ -16,7 +16,7 @@ import { DayStatus } from "@/components/lookahead/StatusCell";
 import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { fetchComparisonData, ComparisonData, ComparisonSummaryBar, ComparisonIndicator, RemovedTasksSection } from "@/components/lookahead/WeekComparison";
+
 import { useMasterTasks } from "@/hooks/useMasterTasks";
 import {
   DndContext,
