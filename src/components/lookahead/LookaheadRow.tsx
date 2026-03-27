@@ -232,7 +232,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
               {dateIndex === 7 && (
                 <td className="w-2 min-w-[8px] bg-border/40" />
               )}
-              <td className={cn("py-1 px-0.5 text-center", cellBg)}>
+              <td className={cn("py-1 px-0.5 text-center", cellBg, isToday && "border-x-2 border-primary/40 bg-primary/5")}>
                 <StatusDetailPopover
                   open={popoverLineId === cellKey}
                   onOpenChange={(open) => setPopoverLineId(open ? cellKey : null)}
