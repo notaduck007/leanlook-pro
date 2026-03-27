@@ -121,7 +121,7 @@ export async function generateLookaheadPDF(
   );
 
   // Build hierarchical rows
-  const rows = buildHierarchicalRows(lines, dates, comparisonData);
+  const rows = buildHierarchicalRows(lines, dates);
 
   // Build columns
   const columns = [
