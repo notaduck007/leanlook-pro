@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CalendarDays, Loader2 } from "lucide-react";
 import { format, startOfWeek, addWeeks, addDays, parseISO, isBefore, isAfter } from "date-fns";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 
@@ -38,6 +39,7 @@ export default function NewLookAhead() {
   const [carryOverTasks, setCarryOverTasks] = useState<CarryOverTask[]>([]);
   const [showCarryOverDialog, setShowCarryOverDialog] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
+  const [recommendedWeekStart, setRecommendedWeekStart] = useState("");
 
   // Load project and latest lookahead to determine next week start
   useEffect(() => {
@@ -58,11 +60,15 @@ export default function NewLookAhead() {
           // Next lookahead starts on Monday of the planning week (week 2 = day 7)
           const prevStart = parseISO(latest.week_start_date);
           const nextStart = addDays(prevStart, 7);
-          setWeekStart(format(nextStart, "yyyy-MM-dd"));
+          const formatted = format(nextStart, "yyyy-MM-dd");
+          setWeekStart(formatted);
+          setRecommendedWeekStart(formatted);
         } else {
           // No previous lookahead — default to next Monday
           const next = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
-          setWeekStart(format(next, "yyyy-MM-dd"));
+          const formatted = format(next, "yyyy-MM-dd");
+          setWeekStart(formatted);
+          setRecommendedWeekStart(formatted);
         }
       });
   }, [projectId]);
@@ -89,7 +95,8 @@ export default function NewLookAhead() {
       });
   }, [projectId, weekStart]);
 
-  // Load carry-over candidates from previous lookahead's Week 2
+  // Load carry-over candidates from previous lookahead
+  // Includes: Week 2 non-complete statuses OR tasks with expected_completion_date beyond the new window
   useEffect(() => {
     if (!previousLookahead) return;
 
@@ -98,6 +105,9 @@ export default function NewLookAhead() {
       const week2Dates = Array.from({ length: 7 }, (_, i) =>
         format(addDays(prevStart, 7 + i), "yyyy-MM-dd")
       );
+
+      // New lookahead's end date (2 weeks from weekStart)
+      const newEndDate = weekStart ? addDays(parseISO(weekStart), 13) : null;
 
       const { data: prevLines } = await supabase
         .from("lookahead_lines")
@@ -117,7 +127,7 @@ export default function NewLookAhead() {
         taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
       }
 
-      // Find lines with Week 2 non-complete statuses
+      // Find lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
       const candidates: CarryOverTask[] = [];
       for (const line of prevLines) {
         const statusPerDay = (line.status_per_day as Record<string, string>) || {};
@@ -126,7 +136,11 @@ export default function NewLookAhead() {
           return s === "N" || s === "50" || s === "planned" || s === "progress";
         });
 
-        if (hasWeek2NonComplete) {
+        // Check if expected_completion_date exceeds the new 2-week window
+        const expectedDate = line.expected_completion_date ? parseISO(line.expected_completion_date) : null;
+        const exceedsNewWindow = expectedDate && newEndDate ? isAfter(expectedDate, newEndDate) : false;
+
+        if (hasWeek2NonComplete || exceedsNewWindow) {
           candidates.push({
             id: line.id,
             task_name: line.task_id ? taskMap[line.task_id]?.name || "Unknown" : line.custom_text || "Custom Task",
@@ -136,8 +150,8 @@ export default function NewLookAhead() {
             materials_needed: line.materials_needed,
             constraints: line.constraints,
             notes: line.notes,
-            percent_complete: (line as any).percent_complete || 0,
-            expected_completion_date: (line as any).expected_completion_date || null,
+            percent_complete: line.percent_complete || 0,
+            expected_completion_date: line.expected_completion_date || null,
             selected: true,
           });
         }
@@ -147,7 +161,7 @@ export default function NewLookAhead() {
     };
 
     loadCarryOver();
-  }, [previousLookahead]);
+  }, [previousLookahead, weekStart]);
 
   const handleCreate = async () => {
     if (!projectId || !user || !profile?.company_id) return;
@@ -342,18 +356,49 @@ export default function NewLookAhead() {
             <p className="text-sm text-muted-foreground mb-1">Project</p>
             <p className="font-medium">{project.name}</p>
           </div>
+
+          {/* Recommended week highlight */}
+          {recommendedWeekStart && previousLookahead && (
+            <div className="rounded-lg border-2 border-success bg-success/10 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarDays className="h-4 w-4 text-success" />
+                <p className="text-sm font-semibold text-success">Recommended Start Date</p>
+              </div>
+              <p className="text-sm">
+                <span className="font-medium">
+                  {format(parseISO(recommendedWeekStart), "EEEE, MMM d, yyyy")}
+                </span>
+                {" "}— continues from previous planning week
+              </p>
+              {weekStart !== recommendedWeekStart && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 border-success text-success hover:bg-success/20"
+                  onClick={() => setWeekStart(recommendedWeekStart)}
+                >
+                  Use Recommended Date
+                </Button>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Week Starting</label>
             <input
               type="date"
               value={weekStart}
               onChange={(e) => setWeekStart(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                weekStart === recommendedWeekStart
+                  ? "border-success ring-success/30"
+                  : "border-input"
+              )}
             />
-            {previousLookahead && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Continues from previous look-ahead starting{" "}
-                {format(parseISO(previousLookahead.week_start_date), "MMM d, yyyy")}
+            {previousLookahead && weekStart !== recommendedWeekStart && (
+              <p className="text-xs text-warning mt-1">
+                ⚠ This differs from the recommended date based on the previous look-ahead.
               </p>
             )}
           </div>
@@ -366,10 +411,10 @@ export default function NewLookAhead() {
           {carryOverTasks.length > 0 && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
               <p className="text-sm font-medium">
-                {carryOverTasks.length} incomplete task(s) from last week's planning week available for carry-over.
+                {carryOverTasks.length} incomplete task(s) available for carry-over.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                You'll be able to select which tasks to bring forward when you create.
+                Includes tasks with non-complete statuses and tasks whose expected completion date extends beyond this window.
               </p>
             </div>
           )}
@@ -386,7 +431,7 @@ export default function NewLookAhead() {
           <DialogHeader>
             <DialogTitle>Carry Over Incomplete Tasks</DialogTitle>
             <DialogDescription>
-              These tasks had non-complete statuses in last week's planning week. Select which to bring forward.
+              These tasks are incomplete or have expected completion dates beyond this look-ahead window. Select which to carry forward — they will persist until completed or dates are updated.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1">
