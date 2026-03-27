@@ -591,6 +591,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      join_company: { Args: { _slug: string }; Returns: string }
       onboard_company: {
         Args: { _company_name: string; _slug: string }
         Returns: string
