@@ -270,7 +270,9 @@ export default function LookAheadEditor() {
                 custom_text: l.custom_text,
                 percent_complete: l.percent_complete,
                 expected_completion_date: l.expected_completion_date,
-              })
+                variance_reason: l.variance_reason,
+                variance_note: l.variance_note,
+              } as any)
               .eq("id", l.id)
           );
           Promise.all(updates).catch(console.error);
