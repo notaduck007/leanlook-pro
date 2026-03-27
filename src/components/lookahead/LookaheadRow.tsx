@@ -470,11 +470,14 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           onToggleHidden={onToggleHidden}
           onPercentChange={onPercentChange}
           onExpectedDateChange={onExpectedDateChange}
+          onVarianceChange={onVarianceChange}
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
           masterTasks={masterTasks}
           showHidden={showHidden}
+          variancePopoverLineDate={variancePopoverLineDate}
+          onVariancePopoverChange={onVariancePopoverChange}
         />
       ))}
     </>
