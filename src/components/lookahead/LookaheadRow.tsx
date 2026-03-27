@@ -51,8 +51,9 @@ interface LookaheadRowProps {
   showHidden?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [popoverLineId, setPopoverLineId] = useState<string | null>(null);
   const depth = line.depth || 0;
   const isSubtask = !!line.parent_line_id;
   const hasChildren = (line.children?.length ?? 0) > 0;
