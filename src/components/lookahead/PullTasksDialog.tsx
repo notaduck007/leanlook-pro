@@ -147,7 +147,7 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         finish_date: t.finish_date,
         tags: (t.tags as string[]) || [],
         parent_id: t.parent_id,
-        selected: !existingTaskIds.has(t.id),
+        selected: !existingTaskIds.has(t.id) && computeOverlapDays(t.start_date, t.finish_date) > 0,
         children: [],
         overlapDays: computeOverlapDays(t.start_date, t.finish_date),
       });
