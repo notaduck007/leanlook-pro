@@ -768,10 +768,41 @@ export default function LookAheadEditor() {
       taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
     }
 
-    const existingIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
-    const newLines = incompleteLines.filter((l) => !l.task_id || !existingIds.has(l.task_id));
+    const existingIdMap = new Map(lines.filter((l) => l.task_id).map((l) => [l.task_id, l.id]));
+    const newLines = incompleteLines.filter((l) => !l.task_id || !existingIdMap.has(l.task_id));
+    const updateLines = incompleteLines.filter((l) => l.task_id && existingIdMap.has(l.task_id));
 
-    if (!newLines.length) {
+    // Build carried status helper
+    const buildCarriedStatus = (pl: any) => {
+      const prevStatus = (pl.status_per_day as Record<string, string>) || {};
+      const wsDate = parseISO(lookAhead.week_start_date);
+      const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(wsDate, j), "yyyy-MM-dd"));
+      const carried: Record<string, string> = {};
+      for (const d of newDates) {
+        if (prevStatus[d]) carried[d] = prevStatus[d];
+      }
+      return carried;
+    };
+
+    // Update existing lines with progress details from previous lookahead
+    for (const pl of updateLines) {
+      const existingLineId = existingIdMap.get(pl.task_id!);
+      if (!existingLineId) continue;
+      const carriedStatus = buildCarriedStatus(pl);
+      const existingLine = lines.find((l) => l.id === existingLineId);
+      const mergedStatus = { ...((existingLine?.status_per_day as Record<string, string>) || {}), ...carriedStatus };
+      await supabase
+        .from("lookahead_lines")
+        .update({
+          percent_complete: pl.percent_complete,
+          expected_completion_date: pl.expected_completion_date,
+          notes: pl.notes ? `Carried over: ${pl.notes}`.trim() : null,
+          status_per_day: mergedStatus,
+        })
+        .eq("id", existingLineId);
+    }
+
+    if (!newLines.length && !updateLines.length) {
       toast({ title: "All carry-over tasks already exist in this look-ahead" });
       return;
     }
@@ -786,27 +817,44 @@ export default function LookAheadEditor() {
       constraints: pl.constraints,
       notes: `Carried over: ${pl.notes || ""}`.trim(),
       sort_order: lines.length + i,
-      status_per_day: {},
+      status_per_day: buildCarriedStatus(pl),
+      percent_complete: pl.percent_complete,
+      expected_completion_date: pl.expected_completion_date,
     }));
 
-    const { data: inserted } = await supabase.from("lookahead_lines").insert(inserts).select();
+    let insertedCount = 0;
+    if (inserts.length > 0) {
+      const { data: inserted } = await supabase.from("lookahead_lines").insert(inserts).select();
 
-    if (inserted) {
-      const mapped: LookaheadLineData[] = inserted.map((l) => ({
-        id: l.id,
-        task_id: l.task_id,
-        custom_text: l.custom_text,
-        task_name: l.task_id ? taskMap[l.task_id]?.name || "Carry-over Task" : l.custom_text || "Carry-over",
-        assigned_trade: l.assigned_trade,
-        materials_needed: l.materials_needed,
-        constraints: l.constraints,
-        notes: l.notes,
-        photos: [],
-        status_per_day: {},
-        sort_order: l.sort_order || 0,
-      }));
-      setLines((prev) => [...prev, ...mapped]);
-      toast({ title: `Pulled ${inserted.length} incomplete tasks from last week` });
+      if (inserted) {
+        const mapped: LookaheadLineData[] = inserted.map((l) => ({
+          id: l.id,
+          task_id: l.task_id,
+          custom_text: l.custom_text,
+          task_name: l.task_id ? taskMap[l.task_id]?.name || "Carry-over Task" : l.custom_text || "Carry-over",
+          assigned_trade: l.assigned_trade,
+          materials_needed: l.materials_needed,
+          constraints: l.constraints,
+          notes: l.notes,
+          photos: [],
+        status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
+          sort_order: l.sort_order || 0,
+          percent_complete: l.percent_complete || 0,
+          expected_completion_date: l.expected_completion_date || null,
+        }));
+        setLines((prev) => [...prev, ...mapped]);
+        insertedCount = inserted.length;
+      }
+    }
+
+    // Refresh data to pick up updates
+    if (updateLines.length > 0) {
+      await fetchData();
+    }
+
+    const totalCarried = insertedCount + updateLines.length;
+    if (totalCarried > 0) {
+      toast({ title: `Pulled ${totalCarried} incomplete tasks from last week` });
     }
   };
 
