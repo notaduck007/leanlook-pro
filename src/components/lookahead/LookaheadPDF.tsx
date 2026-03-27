@@ -250,42 +250,6 @@ export async function generateLookaheadPDF(
   doc.text("Y = Complete    X = Not Done    50 = Partial    P = Planned    IP = In Progress", 40, legendY);
   finalY = legendY;
 
-  // Week-over-week comparison summary
-  if (comparisonData) {
-    finalY += 20;
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Week-Over-Week Summary", 40, finalY);
-
-    finalY += 14;
-    doc.setFontSize(8);
-    doc.setTextColor(71, 85, 105);
-    doc.text(`- ${comparisonData.carriedOverCount} tasks carried over from last week`, 50, finalY);
-    finalY += 11;
-    doc.text(`- ${comparisonData.newCount} new tasks added this week`, 50, finalY);
-    finalY += 11;
-    doc.text(`- ${comparisonData.removedCount} tasks completed/removed since last week`, 50, finalY);
-    if (comparisonData.previousPPC !== null) {
-      finalY += 11;
-      doc.text(`- Last week's PPC: ${comparisonData.previousPPC}%`, 50, finalY);
-    }
-
-    // List removed tasks
-    if (comparisonData.removedLines.length > 0) {
-      finalY += 16;
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text("Completed/Removed Tasks:", 50, finalY);
-      comparisonData.removedLines.forEach((line) => {
-        finalY += 10;
-        if (finalY > doc.internal.pageSize.getHeight() - 40) {
-          doc.addPage();
-          finalY = 40;
-        }
-        doc.text(`  - ${line.task_name}${line.assigned_trade ? ` (${line.assigned_trade})` : ""}`, 56, finalY);
-      });
-    }
-  }
 
   // Page numbers
   const pageCount = doc.getNumberOfPages();
