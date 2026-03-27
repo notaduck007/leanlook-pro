@@ -1330,6 +1330,7 @@ export default function LookAheadEditor() {
                           key={line.id}
                           line={line}
                           dates={dates}
+                          todayStr={todayStr}
                           onStatusChange={handleStatusChange}
                           onFieldChange={handleFieldChange}
                           onDeleteLine={handleDeleteLine}
