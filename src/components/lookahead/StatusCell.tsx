@@ -21,6 +21,8 @@ interface StatusCellProps {
   cellKey?: string;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
+  percentComplete?: number;
+  expectedDate?: string | null;
 }
 
 export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate }: StatusCellProps) {
