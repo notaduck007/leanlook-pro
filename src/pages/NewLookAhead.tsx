@@ -27,6 +27,20 @@ interface CarryOverTask {
   expected_completion_date: string | null;
   status_per_day: Record<string, string>;
   selected: boolean;
+  subtasks: CarryOverSubtask[];
+}
+
+interface CarryOverSubtask {
+  id: string;
+  custom_text: string | null;
+  task_id: string | null;
+  assigned_trade: string | null;
+  materials_needed: string | null;
+  constraints: string | null;
+  notes: string | null;
+  percent_complete: number;
+  expected_completion_date: string | null;
+  status_per_day: Record<string, string>;
 }
 
 export default function NewLookAhead() {
@@ -130,9 +144,13 @@ export default function NewLookAhead() {
         taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
       }
 
-      // Find lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
+      // Separate parent lines and child lines
+      const parentLines = prevLines.filter((l) => !l.parent_line_id);
+      const childLines = prevLines.filter((l) => l.parent_line_id);
+
+      // Find parent lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
       const candidates: CarryOverTask[] = [];
-      for (const line of prevLines) {
+      for (const line of parentLines) {
         const statusPerDay = (line.status_per_day as Record<string, string>) || {};
         const hasWeek2NonComplete = week2Dates.some((d) => {
           const s = statusPerDay[d] as DayStatus;
@@ -144,6 +162,22 @@ export default function NewLookAhead() {
         const exceedsNewWindow = expectedDate && newEndDate ? isAfter(expectedDate, newEndDate) : false;
 
         if (hasWeek2NonComplete || exceedsNewWindow) {
+          // Collect subtasks for this parent
+          const subtasks: CarryOverSubtask[] = childLines
+            .filter((c) => c.parent_line_id === line.id)
+            .map((c) => ({
+              id: c.id,
+              custom_text: c.custom_text,
+              task_id: c.task_id,
+              assigned_trade: c.assigned_trade,
+              materials_needed: c.materials_needed,
+              constraints: c.constraints,
+              notes: c.notes,
+              percent_complete: c.percent_complete || 0,
+              expected_completion_date: c.expected_completion_date || null,
+              status_per_day: (c.status_per_day as Record<string, string>) || {},
+            }));
+
           candidates.push({
             id: line.id,
             task_name: line.task_id ? taskMap[line.task_id]?.name || "Unknown" : line.custom_text || "Custom Task",
@@ -157,6 +191,7 @@ export default function NewLookAhead() {
             expected_completion_date: line.expected_completion_date || null,
             status_per_day: statusPerDay,
             selected: true,
+            subtasks,
           });
         }
       }
@@ -272,7 +307,7 @@ export default function NewLookAhead() {
       }
     }
 
-    // Insert carry-over tasks
+    // Insert carry-over tasks (with subtasks)
     const selectedCarryOver = carryOverTasks.filter((t) => t.selected);
     if (selectedCarryOver.length > 0) {
       const existingTaskIdMap = new Map<string, string>();
@@ -283,19 +318,24 @@ export default function NewLookAhead() {
         .eq("lookahead_id", la.id);
       (existingLines || []).forEach((l) => { if (l.task_id) existingTaskIdMap.set(l.task_id, l.id); });
 
+      const newStart = parseISO(weekStart);
+      const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
+
+      // Helper to filter status_per_day to only new lookahead dates
+      const filterStatus = (spd: Record<string, string>) => {
+        const filtered: Record<string, string> = {};
+        for (const d of newDates) {
+          if (spd[d]) filtered[d] = spd[d];
+        }
+        return filtered;
+      };
+
       // Separate into new inserts vs updates for existing schedule-pulled lines
       const carryInserts: any[] = [];
-      const carryUpdates: { lineId: string; data: any }[] = [];
+      const carryUpdates: { lineId: string; data: any; subtasks: CarryOverSubtask[] }[] = [];
 
       for (const t of selectedCarryOver) {
-        const newStart = parseISO(weekStart);
-        const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
-        const carriedStatus: Record<string, string> = {};
-        for (const d of newDates) {
-          if (t.status_per_day[d]) {
-            carriedStatus[d] = t.status_per_day[d];
-          }
-        }
+        const carriedStatus = filterStatus(t.status_per_day);
 
         if (t.task_id && existingTaskIdMap.has(t.task_id)) {
           // Task already exists from schedule pull — update with progress details and statuses
@@ -306,12 +346,13 @@ export default function NewLookAhead() {
               percent_complete: t.percent_complete,
               expected_completion_date: t.expected_completion_date,
               notes: t.notes ? `Carried over: ${t.notes}`.trim() : null,
-              // Merge carried statuses with existing (carried statuses take priority for overlapping dates)
               status_per_day: carriedStatus,
             },
+            subtasks: t.subtasks,
           });
         } else {
           carryInserts.push({
+            _subtasks: t.subtasks, // temp field, removed before insert
             lookahead_id: la.id,
             company_id: profile.company_id,
             task_id: t.task_id,
@@ -330,8 +371,6 @@ export default function NewLookAhead() {
 
       // Update existing lines with progress details from previous lookahead
       for (const upd of carryUpdates) {
-        // First get existing status_per_day to merge
-        const existing = existingLines?.find((l) => l.id === upd.lineId);
         const { data: fullLine } = await supabase
           .from("lookahead_lines")
           .select("status_per_day")
@@ -342,15 +381,75 @@ export default function NewLookAhead() {
           .from("lookahead_lines")
           .update({ ...upd.data, status_per_day: mergedStatus })
           .eq("id", upd.lineId);
+
+        // Insert subtasks for updated parent
+        if (upd.subtasks.length > 0) {
+          const subtaskRows = upd.subtasks.map((st, si) => ({
+            lookahead_id: la.id,
+            company_id: profile.company_id,
+            task_id: st.task_id,
+            custom_text: st.custom_text,
+            assigned_trade: st.assigned_trade,
+            materials_needed: st.materials_needed,
+            constraints: st.constraints,
+            notes: st.notes,
+            sort_order: si,
+            status_per_day: filterStatus(st.status_per_day),
+            percent_complete: st.percent_complete,
+            expected_completion_date: st.expected_completion_date,
+            parent_line_id: upd.lineId,
+          }));
+          await supabase.from("lookahead_lines").insert(subtaskRows);
+        }
       }
 
+      // Insert new carry-over parent lines and their subtasks
       if (carryInserts.length > 0) {
-        await supabase.from("lookahead_lines").insert(carryInserts);
+        const subtasksPerInsert: CarryOverSubtask[][] = carryInserts.map((ci) => {
+          const subs = ci._subtasks || [];
+          delete ci._subtasks;
+          return subs;
+        });
+
+        const { data: insertedParents } = await supabase
+          .from("lookahead_lines")
+          .insert(carryInserts)
+          .select();
+
+        // Insert subtasks for each newly inserted parent
+        if (insertedParents) {
+          const allSubtaskRows: any[] = [];
+          for (let i = 0; i < insertedParents.length; i++) {
+            const parentId = insertedParents[i].id;
+            const subs = subtasksPerInsert[i] || [];
+            for (let si = 0; si < subs.length; si++) {
+              const st = subs[si];
+              allSubtaskRows.push({
+                lookahead_id: la.id,
+                company_id: profile.company_id,
+                task_id: st.task_id,
+                custom_text: st.custom_text,
+                assigned_trade: st.assigned_trade,
+                materials_needed: st.materials_needed,
+                constraints: st.constraints,
+                notes: st.notes,
+                sort_order: si,
+                status_per_day: filterStatus(st.status_per_day),
+                percent_complete: st.percent_complete,
+                expected_completion_date: st.expected_completion_date,
+                parent_line_id: parentId,
+              });
+            }
+          }
+          if (allSubtaskRows.length > 0) {
+            await supabase.from("lookahead_lines").insert(allSubtaskRows);
+          }
+        }
       }
 
       const totalCarried = carryInserts.length + carryUpdates.length;
       if (totalCarried > 0) {
-        toast({ title: `Carried over ${totalCarried} task(s) from last week` });
+        toast({ title: `Carried over ${totalCarried} task(s) with subtasks from last week` });
       }
     }
 
@@ -551,6 +650,9 @@ export default function NewLookAhead() {
                     {task.percent_complete > 0 && <span>{task.percent_complete}% complete</span>}
                     {task.expected_completion_date && (
                       <span>Due {format(parseISO(task.expected_completion_date), "MMM d")}</span>
+                    )}
+                    {task.subtasks.length > 0 && (
+                      <span className="text-primary">+ {task.subtasks.length} subtask{task.subtasks.length > 1 ? "s" : ""}</span>
                     )}
                   </div>
                 </div>
