@@ -122,6 +122,37 @@ export default function ProjectDetail() {
     }
   };
 
+  const handleDownloadVersion = async (fileUrl: string) => {
+    const { data } = await supabase.storage.from("schedules").createSignedUrl(fileUrl, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    else toast({ title: "Download failed", variant: "destructive" });
+  };
+
+  const handleUpdateVersion = async () => {
+    if (!editingVersion) return;
+    const num = parseInt(editVersionNumber);
+    if (isNaN(num) || num < 1) {
+      toast({ title: "Invalid version number", variant: "destructive" });
+      return;
+    }
+    const { error } = await supabase
+      .from("schedule_versions")
+      .update({ version_number: num })
+      .eq("id", editingVersion.id);
+    if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    else { toast({ title: "Version updated" }); fetchData(); }
+    setEditingVersion(null);
+  };
+
+  const handleDeleteVersion = async (versionId: string) => {
+    // Delete associated tasks first
+    await supabase.from("tasks").delete().eq("schedule_version_id", versionId);
+    const { error } = await supabase.from("schedule_versions").delete().eq("id", versionId);
+    if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    else { toast({ title: "Version deleted" }); fetchData(); }
+    setDeleteVersionId(null);
+  };
+
   if (!project) {
     return (
       <div className="flex items-center justify-center h-64">
