@@ -54,12 +54,30 @@ Deno.serve(async (req) => {
       _user_id: user.id,
     });
 
-    const { email, role, display_name } = await req.json();
+    const { email, role, display_name, password, company_id } = await req.json();
     if (!email) {
       return new Response(JSON.stringify({ error: "Email is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Use provided company_id or fall back to caller's company
+    const targetCompanyId = company_id || callerCompanyId;
+
+    // If a company_id is provided, verify it exists
+    if (company_id) {
+      const { data: companyExists } = await adminClient
+        .from("companies")
+        .select("id")
+        .eq("id", company_id)
+        .single();
+      if (!companyExists) {
+        return new Response(JSON.stringify({ error: "Company not found" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Check if user already exists
@@ -79,7 +97,7 @@ Deno.serve(async (req) => {
         .eq("user_id", targetUserId)
         .single();
       
-      if (profile?.company_id === callerCompanyId) {
+      if (profile?.company_id === targetCompanyId) {
         return new Response(JSON.stringify({ error: "User is already in your organization" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -89,10 +107,41 @@ Deno.serve(async (req) => {
       // Assign to company
       await adminClient
         .from("profiles")
-        .update({ company_id: callerCompanyId })
+        .update({ company_id: targetCompanyId })
+        .eq("user_id", targetUserId);
+    } else if (password) {
+      // Direct creation with password — no invite email sent
+      if (password.length < 6) {
+        return new Response(JSON.stringify({ error: "Password must be at least 6 characters" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { display_name: display_name || email },
+      });
+
+      if (createError) {
+        return new Response(JSON.stringify({ error: createError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      targetUserId = createData.user.id;
+
+      // Wait for trigger to create profile, then set company & name
+      await new Promise((r) => setTimeout(r, 500));
+      await adminClient
+        .from("profiles")
+        .update({ company_id: targetCompanyId, display_name: display_name || null })
         .eq("user_id", targetUserId);
     } else {
-      // Invite new user
+      // Invite by email (legacy flow)
       const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
         data: { display_name: display_name || email },
       });
@@ -108,7 +157,7 @@ Deno.serve(async (req) => {
       await new Promise((r) => setTimeout(r, 500));
       await adminClient
         .from("profiles")
-        .update({ company_id: callerCompanyId, display_name: display_name || null })
+        .update({ company_id: targetCompanyId, display_name: display_name || null })
         .eq("user_id", targetUserId);
     }
 

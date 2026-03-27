@@ -71,7 +71,10 @@ export function UserManagement() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState<AppRole>("super");
+  const [inviteCompanyId, setInviteCompanyId] = useState("");
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [inviting, setInviting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
