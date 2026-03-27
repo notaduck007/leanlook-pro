@@ -1263,7 +1263,7 @@ export default function LookAheadEditor() {
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
-                          comparisonData={showComparison ? comparisonData : undefined}
+                          
                           masterTasks={masterTasks}
                           showHidden={showHidden}
                         />
