@@ -54,6 +54,7 @@ export default function LookAheadEditor() {
   const [showHidden, setShowHidden] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+  const [variancePopoverKey, setVariancePopoverKey] = useState<string | null>(null);
 
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
@@ -165,6 +166,8 @@ export default function LookAheadEditor() {
         expected_completion_date: (l as any).expected_completion_date || null,
         isCarryOver: !!(l as any).carry_over_data || (l.notes || "").toLowerCase().startsWith("carried over"),
         carry_over_data: (l as any).carry_over_data || null,
+        variance_reason: (l as any).variance_reason || null,
+        variance_note: (l as any).variance_note || null,
       }));
 
       setLines(mappedLines);
@@ -203,7 +206,9 @@ export default function LookAheadEditor() {
             custom_text: l.custom_text,
             percent_complete: l.percent_complete,
             expected_completion_date: l.expected_completion_date,
-          })
+            variance_reason: l.variance_reason,
+            variance_note: l.variance_note,
+          } as any)
           .eq("id", l.id)
       );
       await Promise.all(updates);
@@ -265,7 +270,9 @@ export default function LookAheadEditor() {
                 custom_text: l.custom_text,
                 percent_complete: l.percent_complete,
                 expected_completion_date: l.expected_completion_date,
-              })
+                variance_reason: l.variance_reason,
+                variance_note: l.variance_note,
+              } as any)
               .eq("id", l.id)
           );
           Promise.all(updates).catch(console.error);
@@ -305,6 +312,14 @@ export default function LookAheadEditor() {
       prev.map((l) => (l.id === lineId ? { ...l, expected_completion_date: date } : l))
     );
     supabase.from("lookahead_lines").update({ expected_completion_date: date }).eq("id", lineId);
+    markDirty();
+  };
+
+  const handleVarianceChange = (lineId: string, reason: string | null, note: string | null) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, variance_reason: reason, variance_note: note } : l))
+    );
+    supabase.from("lookahead_lines").update({ variance_reason: reason, variance_note: note } as any).eq("id", lineId);
     markDirty();
   };
 
@@ -1445,12 +1460,14 @@ export default function LookAheadEditor() {
                           onToggleHidden={handleToggleHidden}
                           onPercentChange={handlePercentChange}
                           onExpectedDateChange={handleExpectedDateChange}
+                          onVarianceChange={handleVarianceChange}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
-                          
                           masterTasks={masterTasks}
                           showHidden={showHidden}
+                          variancePopoverLineDate={variancePopoverKey}
+                          onVariancePopoverChange={setVariancePopoverKey}
                         />
                       ))}
                     </SortableContext>

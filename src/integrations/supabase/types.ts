@@ -105,6 +105,8 @@ export type Database = {
           sort_order: number | null
           status_per_day: Json | null
           task_id: string | null
+          variance_note: string | null
+          variance_reason: string | null
         }
         Insert: {
           assigned_trade?: string | null
@@ -124,6 +126,8 @@ export type Database = {
           sort_order?: number | null
           status_per_day?: Json | null
           task_id?: string | null
+          variance_note?: string | null
+          variance_reason?: string | null
         }
         Update: {
           assigned_trade?: string | null
@@ -143,6 +147,8 @@ export type Database = {
           sort_order?: number | null
           status_per_day?: Json | null
           task_id?: string | null
+          variance_note?: string | null
+          variance_reason?: string | null
         }
         Relationships: [
           {
