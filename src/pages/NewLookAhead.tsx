@@ -293,7 +293,18 @@ export default function NewLookAhead() {
           constraints: t.constraints,
           notes: `Carried over: ${t.notes || ""}`.trim(),
           sort_order: 1000 + i,
-          status_per_day: {},
+          status_per_day: (() => {
+            // Carry over statuses from previous lookahead that fall within the new 2-week window
+            const newStart = parseISO(weekStart);
+            const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
+            const carried: Record<string, string> = {};
+            for (const d of newDates) {
+              if (t.status_per_day[d]) {
+                carried[d] = t.status_per_day[d];
+              }
+            }
+            return carried;
+          })(),
           percent_complete: t.percent_complete,
           expected_completion_date: t.expected_completion_date,
         }));
