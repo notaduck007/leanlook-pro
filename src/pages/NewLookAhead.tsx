@@ -651,6 +651,9 @@ export default function NewLookAhead() {
                     {task.expected_completion_date && (
                       <span>Due {format(parseISO(task.expected_completion_date), "MMM d")}</span>
                     )}
+                    {task.subtasks.length > 0 && (
+                      <span className="text-primary">+ {task.subtasks.length} subtask{task.subtasks.length > 1 ? "s" : ""}</span>
+                    )}
                   </div>
                 </div>
               </label>
