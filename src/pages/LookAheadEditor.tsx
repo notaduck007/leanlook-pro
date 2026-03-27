@@ -920,6 +920,9 @@ export default function LookAheadEditor() {
 
   const isOwner = lookAhead?.super_id === user?.id;
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+
+  // Today's date string for column highlighting
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const isRejected = lookAhead?.status === "rejected";
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
