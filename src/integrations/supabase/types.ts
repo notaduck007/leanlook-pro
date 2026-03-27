@@ -331,12 +331,55 @@ export type Database = {
           },
         ]
       }
+      project_constraints: {
+        Row: {
+          company_id: string
+          description: string
+          id: string
+          project_id: string
+          rank: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          description?: string
+          id?: string
+          project_id: string
+          rank: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          description?: string
+          id?: string
+          project_id?: string
+          rank?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_constraints_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_constraints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           company_id: string
           created_at: string
           id: string
           name: string
+          ppc_goal: number
           status: Database["public"]["Enums"]["project_status"]
           updated_at: string
         }
@@ -345,6 +388,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          ppc_goal?: number
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
         }
@@ -353,6 +397,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          ppc_goal?: number
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
         }
