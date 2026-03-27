@@ -1350,6 +1350,41 @@ export default function LookAheadEditor() {
                     </SortableContext>
                   )}
                 </tbody>
+                {/* Summary Footer Row */}
+                {lines.length > 0 && (
+                  <tfoot className="bg-muted/40 border-t-2 border-border">
+                    <tr>
+                      <td className="py-2 px-2 text-xs font-semibold text-muted-foreground sticky left-0 bg-muted/40 z-10" colSpan={2}>
+                        Daily Summary
+                      </td>
+                      {dates.map((date, i) => {
+                        const isToday = date === todayStr;
+                        const stats = { done: 0, total: 0 };
+                        lines.forEach((l) => {
+                          const s = l.status_per_day[date] as DayStatus;
+                          if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
+                            stats.total++;
+                            if (s === "Y") stats.done++;
+                          }
+                        });
+                        const ratio = stats.total > 0 ? stats.done / stats.total : -1;
+                        let textColor = "text-muted-foreground";
+                        if (ratio >= 1) textColor = "text-green-600 dark:text-green-400";
+                        else if (ratio >= 0.5) textColor = "text-yellow-600 dark:text-yellow-400";
+                        else if (ratio >= 0) textColor = "text-red-600 dark:text-red-400";
+                        return (
+                          <React.Fragment key={date}>
+                            {i === 7 && <td className="w-2 min-w-[8px] bg-border/40" />}
+                            <td className={cn("py-2 px-0.5 text-center text-[10px] font-bold", textColor, isToday && "border-x-2 border-primary/40 bg-primary/5")}>
+                              {stats.total > 0 ? `${stats.done}/${stats.total}` : "—"}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })}
+                      <td colSpan={3}></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </DndContext>
 
