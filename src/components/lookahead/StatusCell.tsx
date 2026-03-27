@@ -25,7 +25,7 @@ interface StatusCellProps {
   expectedDate?: string | null;
 }
 
-export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate }: StatusCellProps) {
+export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate, percentComplete, expectedDate }: StatusCellProps) {
   const refCallback = useCallback(
     (el: HTMLButtonElement | null) => {
       if (cellKey && onRegisterRef) onRegisterRef(cellKey, el);
