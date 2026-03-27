@@ -59,11 +59,15 @@ export default function NewLookAhead() {
           // Next lookahead starts on Monday of the planning week (week 2 = day 7)
           const prevStart = parseISO(latest.week_start_date);
           const nextStart = addDays(prevStart, 7);
-          setWeekStart(format(nextStart, "yyyy-MM-dd"));
+          const formatted = format(nextStart, "yyyy-MM-dd");
+          setWeekStart(formatted);
+          setRecommendedWeekStart(formatted);
         } else {
           // No previous lookahead — default to next Monday
           const next = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
-          setWeekStart(format(next, "yyyy-MM-dd"));
+          const formatted = format(next, "yyyy-MM-dd");
+          setWeekStart(formatted);
+          setRecommendedWeekStart(formatted);
         }
       });
   }, [projectId]);
