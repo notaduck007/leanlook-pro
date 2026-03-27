@@ -258,6 +258,7 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                     onNavigate={onNavigate}
                   />
                 </StatusDetailPopover>
+              </td>
             </React.Fragment>
           );
         })}
