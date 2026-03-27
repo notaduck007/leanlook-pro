@@ -54,6 +54,7 @@ export default function LookAheadEditor() {
   const [showHidden, setShowHidden] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+  const [variancePopoverKey, setVariancePopoverKey] = useState<string | null>(null);
 
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
