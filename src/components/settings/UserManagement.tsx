@@ -26,7 +26,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Users, Search, MoreHorizontal, Shield, ShieldCheck, HardHat,
-  Pencil, Trash2, UserPlus, ChevronUp, ChevronDown,
+  Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Mail, Loader2,
 } from "lucide-react";
 
 type AppRole = "admin" | "pm" | "super";
@@ -47,7 +47,7 @@ type SortField = "display_name" | "roles";
 type SortDir = "asc" | "desc";
 
 export function UserManagement() {
-  const { profile, roles: myRoles, user } = useAuth();
+  const { profile, roles: myRoles, user, session } = useAuth();
   const { toast } = useToast();
   const isAdmin = myRoles.includes("admin");
 
@@ -65,15 +65,19 @@ export function UserManagement() {
 
   // Remove confirmation
   const [removeUser, setRemoveUser] = useState<CompanyUser | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteRole, setInviteRole] = useState<AppRole>("super");
+  const [inviting, setInviting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     if (!profile?.company_id) return;
     setLoading(true);
 
-    // Get all profiles in company
     const { data: profiles } = await supabase
       .from("profiles")
       .select("user_id, display_name")
@@ -81,7 +85,6 @@ export function UserManagement() {
 
     if (!profiles) { setLoading(false); return; }
 
-    // Get all roles for those users
     const userIds = profiles.map((p) => p.user_id);
     const { data: rolesData } = await supabase
       .from("user_roles")
@@ -150,6 +153,40 @@ export function UserManagement() {
     else setSelected(new Set(filtered.map((u) => u.user_id)));
   };
 
+  // --- Invite user ---
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const res = await supabase.functions.invoke("invite-user", {
+        body: {
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          display_name: inviteName.trim() || null,
+        },
+      });
+
+      if (res.error || res.data?.error) {
+        toast({
+          title: "Invite failed",
+          description: res.data?.error || res.error?.message || "Unknown error",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "User invited successfully", description: `Invite sent to ${inviteEmail}` });
+        setInviteOpen(false);
+        setInviteEmail("");
+        setInviteName("");
+        setInviteRole("super");
+        fetchUsers();
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setInviting(false);
+    }
+  };
+
   // --- Edit ---
   const openEdit = (u: CompanyUser) => {
     setEditUser(u);
@@ -159,7 +196,6 @@ export function UserManagement() {
 
   const handleSaveEdit = async () => {
     if (!editUser) return;
-    // Update display name
     if (editName !== editUser.display_name) {
       const { error } = await supabase
         .from("profiles")
@@ -171,10 +207,8 @@ export function UserManagement() {
       }
     }
 
-    // Sync roles: remove old, add new
     const oldRoles = new Set(editUser.roles);
     const newRoles = new Set(editRoles);
-
     const toRemove = editUser.roles.filter((r) => !newRoles.has(r));
     const toAdd = editRoles.filter((r) => !oldRoles.has(r));
 
@@ -213,17 +247,31 @@ export function UserManagement() {
     fetchUsers();
   };
 
-  // --- Remove user roles (soft remove) ---
+  // --- Remove user (full removal from org via edge function) ---
   const handleRemoveUser = async () => {
     if (!removeUser) return;
-    // Remove all roles — effectively deactivates the user
-    for (const role of removeUser.roles) {
-      await supabase.from("user_roles").delete()
-        .eq("user_id", removeUser.user_id).eq("role", role);
+    setRemoving(true);
+    try {
+      const res = await supabase.functions.invoke("remove-user", {
+        body: { target_user_id: removeUser.user_id },
+      });
+
+      if (res.error || res.data?.error) {
+        toast({
+          title: "Error",
+          description: res.data?.error || res.error?.message || "Failed to remove user",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: `${removeUser.display_name || "User"} removed from organization` });
+        setRemoveUser(null);
+        fetchUsers();
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setRemoving(false);
     }
-    toast({ title: `Removed all roles from ${removeUser.display_name || "user"}` });
-    setRemoveUser(null);
-    fetchUsers();
   };
 
   if (!isAdmin) {
@@ -240,9 +288,14 @@ export function UserManagement() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Users className="h-4 w-4" /> User Management
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" /> User Management
+            </CardTitle>
+            <Button size="sm" onClick={() => setInviteOpen(true)} className="gap-1.5">
+              <UserPlus className="h-3.5 w-3.5" /> Add User
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Toolbar */}
@@ -379,7 +432,7 @@ export function UserManagement() {
                                   className="text-destructive"
                                   onClick={() => setRemoveUser(u)}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Roles
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove User
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -398,6 +451,73 @@ export function UserManagement() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Invite Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" /> Add User
+            </DialogTitle>
+            <DialogDescription>
+              Invite a new user by email or add an existing user to your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Email Address *</Label>
+              <div className="relative">
+                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Display Name</Label>
+              <Input
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                placeholder="Enter display name (optional)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Initial Role</Label>
+              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(ROLE_CONFIG) as AppRole[]).map((role) => {
+                    const cfg = ROLE_CONFIG[role];
+                    return (
+                      <SelectItem key={role} value={role}>
+                        <span className="flex items-center gap-2">
+                          {cfg.label}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                You can change roles later from the user list.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
+              {inviting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {inviting ? "Inviting..." : "Add User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
@@ -471,19 +591,22 @@ export function UserManagement() {
       <AlertDialog open={!!removeUser} onOpenChange={(o) => !o && setRemoveUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove all roles?</AlertDialogTitle>
+            <AlertDialogTitle>Remove user from organization?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove all roles from <strong>{removeUser?.display_name || "this user"}</strong>.
-              They will lose access to all features until roles are re-assigned.
+              This will remove <strong>{removeUser?.display_name || "this user"}</strong> from your
+              organization entirely. All their roles will be cleared and they will lose access to all
+              projects and data. They can be re-invited later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleRemoveUser}
+              disabled={removing}
             >
-              Remove Roles
+              {removing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {removing ? "Removing..." : "Remove User"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
