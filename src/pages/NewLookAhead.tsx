@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, CalendarIcon, Loader2 } from "lucide-react";
 import { format, startOfWeek, addWeeks, addDays, parseISO, isBefore, isAfter } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 
 interface CarryOverTask {
@@ -398,17 +400,55 @@ export default function NewLookAhead() {
 
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Week Starting</label>
-            <input
-              type="date"
-              value={weekStart}
-              onChange={(e) => setWeekStart(e.target.value)}
-              className={cn(
-                "flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                weekStart === recommendedWeekStart
-                  ? "border-success ring-success/30"
-                  : "border-input"
-              )}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={weekStart}
+                onChange={(e) => setWeekStart(e.target.value)}
+                className={cn(
+                  "flex h-10 flex-1 rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  weekStart === recommendedWeekStart
+                    ? "border-success ring-success/30"
+                    : "border-input"
+                )}
+              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
+                    <CalendarIcon className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={weekStart ? parseISO(weekStart) : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        const monday = startOfWeek(date, { weekStartsOn: 1 });
+                        setWeekStart(format(monday, "yyyy-MM-dd"));
+                      }
+                    }}
+                    modifiers={{
+                      recommended: recommendedWeekStart
+                        ? Array.from({ length: 7 }, (_, i) => addDays(parseISO(recommendedWeekStart), i))
+                        : [],
+                    }}
+                    modifiersClassNames={{
+                      recommended: "bg-success/20 text-success-foreground font-semibold",
+                    }}
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                  {recommendedWeekStart && (
+                    <div className="px-3 pb-3">
+                      <p className="text-xs text-muted-foreground">
+                        <span className="inline-block w-3 h-3 rounded bg-success/20 mr-1 align-middle" />
+                        Recommended week
+                      </p>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
             {previousLookahead && weekStart !== recommendedWeekStart && (
               <p className="text-xs text-warning mt-1">
                 ⚠ This differs from the recommended date based on the previous look-ahead.
