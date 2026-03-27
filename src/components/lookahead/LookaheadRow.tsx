@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "l
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ComparisonData, ComparisonIndicator } from "./WeekComparison";
+
 import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
 import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/MasterAutocomplete";
 import { MasterTaskRecord } from "@/hooks/useMasterTasks";
