@@ -1000,7 +1000,7 @@ export default function LookAheadEditor() {
                     <DropdownMenuItem disabled={generatingPDF} onClick={async () => {
                       setGeneratingPDF(true);
                       try {
-                        await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, showComparison ? comparisonData : null);
+                        await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates, null);
                       } finally {
                         setGeneratingPDF(false);
                       }
