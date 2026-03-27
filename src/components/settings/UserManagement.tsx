@@ -165,28 +165,40 @@ export function UserManagement() {
   // --- Invite user ---
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
+    if (!invitePassword.trim()) {
+      toast({ title: "Password is required", variant: "destructive" });
+      return;
+    }
+    if (invitePassword.length < 6) {
+      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
     setInviting(true);
     try {
       const res = await supabase.functions.invoke("invite-user", {
         body: {
           email: inviteEmail.trim(),
+          password: invitePassword,
           role: inviteRole,
           display_name: inviteName.trim() || null,
+          company_id: inviteCompanyId || null,
         },
       });
 
       if (res.error || res.data?.error) {
         toast({
-          title: "Invite failed",
+          title: "Failed to create user",
           description: res.data?.error || res.error?.message || "Unknown error",
           variant: "destructive",
         });
       } else {
-        toast({ title: "User invited successfully", description: `Invite sent to ${inviteEmail}` });
+        toast({ title: "User created successfully", description: `${inviteEmail} can now sign in.` });
         setInviteOpen(false);
         setInviteEmail("");
         setInviteName("");
+        setInvitePassword("");
         setInviteRole("super");
+        setInviteCompanyId("");
         fetchUsers();
       }
     } catch (err: any) {
