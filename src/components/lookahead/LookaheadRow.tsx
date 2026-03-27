@@ -98,10 +98,6 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
     return { id: data.id, primaryText: data.name, secondaryText: data.category || undefined };
   };
 
-  const isNewTask = comparisonData && (() => {
-    const key = line.task_id || line.custom_text || "";
-    return key ? comparisonData.newLineKeys.has(key) : false;
-  })();
 
   const isHidden = line.hidden === true;
 
