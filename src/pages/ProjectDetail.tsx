@@ -5,12 +5,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock, Trash2 } from "lucide-react";
+import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock, Trash2, Download, Pencil, MoreVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { GanttChart } from "@/components/project/GanttChart";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +27,9 @@ export default function ProjectDetail() {
   const [lookAheads, setLookAheads] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [editingVersion, setEditingVersion] = useState<any>(null);
+  const [editVersionNumber, setEditVersionNumber] = useState("");
+  const [deleteVersionId, setDeleteVersionId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -115,6 +122,37 @@ export default function ProjectDetail() {
     }
   };
 
+  const handleDownloadVersion = async (fileUrl: string) => {
+    const { data } = await supabase.storage.from("schedules").createSignedUrl(fileUrl, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    else toast({ title: "Download failed", variant: "destructive" });
+  };
+
+  const handleUpdateVersion = async () => {
+    if (!editingVersion) return;
+    const num = parseInt(editVersionNumber);
+    if (isNaN(num) || num < 1) {
+      toast({ title: "Invalid version number", variant: "destructive" });
+      return;
+    }
+    const { error } = await supabase
+      .from("schedule_versions")
+      .update({ version_number: num })
+      .eq("id", editingVersion.id);
+    if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    else { toast({ title: "Version updated" }); fetchData(); }
+    setEditingVersion(null);
+  };
+
+  const handleDeleteVersion = async (versionId: string) => {
+    // Delete associated tasks first
+    await supabase.from("tasks").delete().eq("schedule_version_id", versionId);
+    const { error } = await supabase.from("schedule_versions").delete().eq("id", versionId);
+    if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    else { toast({ title: "Version deleted" }); fetchData(); }
+    setDeleteVersionId(null);
+  };
+
   if (!project) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -183,6 +221,24 @@ export default function ProjectDetail() {
                         <p className="text-xs text-muted-foreground">{new Date(v.uploaded_at).toLocaleDateString()}</p>
                       </div>
                     </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleDownloadVersion(v.file_url)}>
+                          <Download className="mr-2 h-4 w-4" /> Download
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { setEditingVersion(v); setEditVersionNumber(String(v.version_number)); }}>
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => setDeleteVersionId(v.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ))}
               </div>
@@ -337,6 +393,49 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Version Dialog */}
+      <Dialog open={!!editingVersion} onOpenChange={(open) => !open && setEditingVersion(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Schedule Version</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Version Number</Label>
+              <Input type="number" min={1} value={editVersionNumber} onChange={(e) => setEditVersionNumber(e.target.value)} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Uploaded: {editingVersion && new Date(editingVersion.uploaded_at).toLocaleString()}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingVersion(null)}>Cancel</Button>
+            <Button onClick={handleUpdateVersion}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Version Confirmation */}
+      <AlertDialog open={!!deleteVersionId} onOpenChange={(open) => !open && setDeleteVersionId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Schedule Version?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this schedule version and all its parsed tasks. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteVersionId && handleDeleteVersion(deleteVersionId)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
