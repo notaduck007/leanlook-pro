@@ -78,7 +78,7 @@ interface LookaheadRowProps {
   onVariancePopoverChange?: (lineDateKey: string | null) => void;
 }
 
-export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, onVarianceChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden, variancePopoverLineDate, onVariancePopoverChange }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [popoverLineId, setPopoverLineId] = useState<string | null>(null);
   const depth = line.depth || 0;
