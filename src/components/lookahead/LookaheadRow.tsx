@@ -193,6 +193,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         {/* Daily Status Cells */}
         {dates.map((date, dateIndex) => {
           const isWeekend = [0, 6].includes(new Date(date + "T00:00:00").getDay());
+          const isToday = date === todayStr;
           const cellKey = `${line.id}-${date}`;
 
           let cellBg = "";
