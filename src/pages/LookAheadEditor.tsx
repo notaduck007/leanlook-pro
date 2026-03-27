@@ -160,6 +160,8 @@ export default function LookAheadEditor() {
         sort_order: l.sort_order || 0,
         parent_line_id: (l as any).parent_line_id || null,
         hidden: (l as any).hidden || false,
+        percent_complete: (l as any).percent_complete || 0,
+        expected_completion_date: (l as any).expected_completion_date || null,
       }));
 
       setLines(mappedLines);
@@ -280,6 +282,22 @@ export default function LookAheadEditor() {
     setLines((prev) =>
       prev.map((l) => (l.id === lineId ? { ...l, [field]: value } : l))
     );
+    markDirty();
+  };
+
+  const handlePercentChange = (lineId: string, value: number) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, percent_complete: value } : l))
+    );
+    supabase.from("lookahead_lines").update({ percent_complete: value }).eq("id", lineId);
+    markDirty();
+  };
+
+  const handleExpectedDateChange = (lineId: string, date: string | null) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, expected_completion_date: date } : l))
+    );
+    supabase.from("lookahead_lines").update({ expected_completion_date: date }).eq("id", lineId);
     markDirty();
   };
 
@@ -1167,6 +1185,19 @@ export default function LookAheadEditor() {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <table className="w-full text-sm border-collapse">
                 <thead className="bg-muted/50 sticky top-0 z-20">
+                  {/* Week labels row */}
+                  <tr>
+                    <th className="sticky left-0 bg-muted/50 z-30" rowSpan={1}></th>
+                    <th></th>
+                    <th colSpan={7} className="py-1 text-center text-[10px] font-bold uppercase tracking-wider text-primary border-b border-primary/20">
+                      Working Week
+                    </th>
+                    <th className="w-2 min-w-[8px] bg-border/40"></th>
+                    <th colSpan={7} className="py-1 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-muted-foreground/20">
+                      Planning Week
+                    </th>
+                    <th colSpan={3}></th>
+                  </tr>
                   <tr>
                     <th className="text-left py-2 px-2 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-30 min-w-[200px]">
                       Task
@@ -1245,6 +1276,8 @@ export default function LookAheadEditor() {
                           onNameChange={handleNameChange}
                           onAddSubtask={handleAddSubtask}
                           onToggleHidden={handleToggleHidden}
+                          onPercentChange={handlePercentChange}
+                          onExpectedDateChange={handleExpectedDateChange}
                           readOnly={isReadOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}

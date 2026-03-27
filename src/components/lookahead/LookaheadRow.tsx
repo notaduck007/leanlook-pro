@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
+import { StatusDetailPopover } from "./StatusDetailPopover";
 import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
@@ -27,6 +28,8 @@ export interface LookaheadLineData {
   children?: LookaheadLineData[];
   parent_line_id?: string | null;
   hidden?: boolean;
+  percent_complete?: number;
+  expected_completion_date?: string | null;
 }
 
 interface LookaheadRowProps {
@@ -38,6 +41,8 @@ interface LookaheadRowProps {
   onNameChange?: (lineId: string, newName: string) => void;
   onAddSubtask?: (parentLineId: string) => void;
   onToggleHidden?: (lineId: string, hidden: boolean) => void;
+  onPercentChange?: (lineId: string, value: number) => void;
+  onExpectedDateChange?: (lineId: string, date: string | null) => void;
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
@@ -46,8 +51,9 @@ interface LookaheadRowProps {
   showHidden?: boolean;
 }
 
-export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [popoverLineId, setPopoverLineId] = useState<string | null>(null);
   const depth = line.depth || 0;
   const isSubtask = !!line.parent_line_id;
   const hasChildren = (line.children?.length ?? 0) > 0;
@@ -225,15 +231,33 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                 <td className="w-2 min-w-[8px] bg-border/40" />
               )}
               <td className={cn("py-1 px-0.5 text-center", cellBg)}>
-                <StatusCell
+                <StatusDetailPopover
+                  open={popoverLineId === cellKey}
+                  onOpenChange={(open) => setPopoverLineId(open ? cellKey : null)}
+                  percentComplete={line.percent_complete || 0}
+                  expectedCompletionDate={line.expected_completion_date || null}
+                  onPercentChange={(v) => onPercentChange?.(line.id, v)}
+                  onDateChange={(d) => onExpectedDateChange?.(line.id, d)}
                   status={(line.status_per_day[date] as DayStatus) || ""}
-                  onChange={(s) => onStatusChange(line.id, date, s)}
-                  isWeekend={isWeekend}
-                  readOnly={readOnly}
-                  cellKey={cellKey}
-                  onRegisterRef={onRegisterRef}
-                  onNavigate={onNavigate}
-                />
+                >
+                  <StatusCell
+                    status={(line.status_per_day[date] as DayStatus) || ""}
+                    onChange={(s) => {
+                      onStatusChange(line.id, date, s);
+                      // Show popover for non-complete statuses
+                      if (s === "N" || s === "50" || s === "planned" || s === "progress") {
+                        setPopoverLineId(cellKey);
+                      } else {
+                        setPopoverLineId(null);
+                      }
+                    }}
+                    isWeekend={isWeekend}
+                    readOnly={readOnly}
+                    cellKey={cellKey}
+                    onRegisterRef={onRegisterRef}
+                    onNavigate={onNavigate}
+                  />
+                </StatusDetailPopover>
               </td>
             </React.Fragment>
           );
@@ -315,6 +339,8 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
           onNameChange={onNameChange}
           onAddSubtask={onAddSubtask}
           onToggleHidden={onToggleHidden}
+          onPercentChange={onPercentChange}
+          onExpectedDateChange={onExpectedDateChange}
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
