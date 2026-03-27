@@ -201,6 +201,8 @@ export default function LookAheadEditor() {
             materials_needed: l.materials_needed,
             constraints: l.constraints,
             custom_text: l.custom_text,
+            percent_complete: l.percent_complete,
+            expected_completion_date: l.expected_completion_date,
           })
           .eq("id", l.id)
       );
