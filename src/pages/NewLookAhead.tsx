@@ -1,12 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CalendarDays, Loader2 } from "lucide-react";
 import { format, startOfWeek, addWeeks, addDays, parseISO, isBefore, isAfter } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { DayStatus } from "@/components/lookahead/StatusCell";
+
+interface CarryOverTask {
+  id: string;
+  task_name: string;
+  assigned_trade: string | null;
+  task_id: string | null;
+  custom_text: string | null;
+  materials_needed: string | null;
+  constraints: string | null;
+  notes: string | null;
+  percent_complete: number;
+  expected_completion_date: string | null;
+  selected: boolean;
+}
 
 export default function NewLookAhead() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -15,21 +32,44 @@ export default function NewLookAhead() {
   const { toast } = useToast();
   const [project, setProject] = useState<any>(null);
   const [creating, setCreating] = useState(false);
-  const [weekStart, setWeekStart] = useState(() => {
-    const next = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
-    return format(next, "yyyy-MM-dd");
-  });
+  const [weekStart, setWeekStart] = useState("");
   const [taskCount, setTaskCount] = useState(0);
+  const [previousLookahead, setPreviousLookahead] = useState<any>(null);
+  const [carryOverTasks, setCarryOverTasks] = useState<CarryOverTask[]>([]);
+  const [showCarryOverDialog, setShowCarryOverDialog] = useState(false);
+  const [pendingCreate, setPendingCreate] = useState(false);
 
+  // Load project and latest lookahead to determine next week start
   useEffect(() => {
     if (!projectId) return;
     supabase.from("projects").select("*").eq("id", projectId).single().then(({ data }) => setProject(data));
+
+    // Find latest lookahead for this project to auto-set the next week start
+    supabase
+      .from("look_aheads")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("week_start_date", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data?.length) {
+          const latest = data[0];
+          setPreviousLookahead(latest);
+          // Next lookahead starts on Monday of the planning week (week 2 = day 7)
+          const prevStart = parseISO(latest.week_start_date);
+          const nextStart = addDays(prevStart, 7);
+          setWeekStart(format(nextStart, "yyyy-MM-dd"));
+        } else {
+          // No previous lookahead — default to next Monday
+          const next = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
+          setWeekStart(format(next, "yyyy-MM-dd"));
+        }
+      });
   }, [projectId]);
 
+  // Count tasks overlapping the 2-week window
   useEffect(() => {
-    if (!projectId) return;
-    // Count tasks overlapping the 2-week window
-    const start = weekStart;
+    if (!projectId || !weekStart) return;
     const end = format(addWeeks(new Date(weekStart), 2), "yyyy-MM-dd");
     supabase
       .from("schedule_versions")
@@ -44,13 +84,80 @@ export default function NewLookAhead() {
           .select("id", { count: "exact" })
           .eq("schedule_version_id", versions[0].id)
           .lte("start_date", end)
-          .gte("finish_date", start)
+          .gte("finish_date", weekStart)
           .then(({ count }) => setTaskCount(count || 0));
       });
   }, [projectId, weekStart]);
 
+  // Load carry-over candidates from previous lookahead's Week 2
+  useEffect(() => {
+    if (!previousLookahead) return;
+
+    const loadCarryOver = async () => {
+      const prevStart = parseISO(previousLookahead.week_start_date);
+      const week2Dates = Array.from({ length: 7 }, (_, i) =>
+        format(addDays(prevStart, 7 + i), "yyyy-MM-dd")
+      );
+
+      const { data: prevLines } = await supabase
+        .from("lookahead_lines")
+        .select("*")
+        .eq("lookahead_id", previousLookahead.id);
+
+      if (!prevLines?.length) return;
+
+      // Get task names
+      const taskIds = prevLines.filter((l) => l.task_id).map((l) => l.task_id!);
+      let taskMap: Record<string, any> = {};
+      if (taskIds.length > 0) {
+        const { data: tasks } = await supabase
+          .from("tasks")
+          .select("id, name")
+          .in("id", taskIds);
+        taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
+      }
+
+      // Find lines with Week 2 non-complete statuses
+      const candidates: CarryOverTask[] = [];
+      for (const line of prevLines) {
+        const statusPerDay = (line.status_per_day as Record<string, string>) || {};
+        const hasWeek2NonComplete = week2Dates.some((d) => {
+          const s = statusPerDay[d] as DayStatus;
+          return s === "N" || s === "50" || s === "planned" || s === "progress";
+        });
+
+        if (hasWeek2NonComplete) {
+          candidates.push({
+            id: line.id,
+            task_name: line.task_id ? taskMap[line.task_id]?.name || "Unknown" : line.custom_text || "Custom Task",
+            assigned_trade: line.assigned_trade,
+            task_id: line.task_id,
+            custom_text: line.custom_text,
+            materials_needed: line.materials_needed,
+            constraints: line.constraints,
+            notes: line.notes,
+            percent_complete: (line as any).percent_complete || 0,
+            expected_completion_date: (line as any).expected_completion_date || null,
+            selected: true,
+          });
+        }
+      }
+
+      setCarryOverTasks(candidates);
+    };
+
+    loadCarryOver();
+  }, [previousLookahead]);
+
   const handleCreate = async () => {
     if (!projectId || !user || !profile?.company_id) return;
+
+    // If there are carry-over tasks and dialog hasn't been shown, show it first
+    if (carryOverTasks.length > 0 && !pendingCreate) {
+      setShowCarryOverDialog(true);
+      return;
+    }
+
     setCreating(true);
 
     // Create the look-ahead
@@ -93,7 +200,7 @@ export default function NewLookAhead() {
         .gte("finish_date", weekStart)
         .order("name");
 
-      // Fetch task templates for auto-filling materials/constraints
+      // Fetch task templates for auto-filling
       const { data: templates } = await supabase
         .from("task_templates")
         .select("*")
@@ -104,7 +211,6 @@ export default function NewLookAhead() {
 
       if (tasks?.length) {
         const lines = tasks.map((task, i) => {
-          // Compute status_per_day based on task dates
           const statusPerDay: Record<string, string> = {};
           const taskStart = task.start_date ? parseISO(task.start_date) : null;
           const taskEnd = task.finish_date ? parseISO(task.finish_date) : taskStart;
@@ -117,7 +223,6 @@ export default function NewLookAhead() {
             }
           });
 
-          // Auto-fill from templates based on task tags
           const taskTags = (task.tags as string[]) || [];
           let materials: string | null = null;
           let constraints: string | null = null;
@@ -149,11 +254,67 @@ export default function NewLookAhead() {
       }
     }
 
+    // Insert carry-over tasks
+    const selectedCarryOver = carryOverTasks.filter((t) => t.selected);
+    if (selectedCarryOver.length > 0) {
+      const existingTaskIds = new Set<string>();
+      // Get already inserted lines to avoid duplicates
+      const { data: existingLines } = await supabase
+        .from("lookahead_lines")
+        .select("task_id")
+        .eq("lookahead_id", la.id);
+      (existingLines || []).forEach((l) => { if (l.task_id) existingTaskIds.add(l.task_id); });
+
+      const carryInserts = selectedCarryOver
+        .filter((t) => !t.task_id || !existingTaskIds.has(t.task_id))
+        .map((t, i) => ({
+          lookahead_id: la.id,
+          company_id: profile.company_id,
+          task_id: t.task_id,
+          custom_text: t.custom_text,
+          assigned_trade: t.assigned_trade,
+          materials_needed: t.materials_needed,
+          constraints: t.constraints,
+          notes: `Carried over: ${t.notes || ""}`.trim(),
+          sort_order: 1000 + i,
+          status_per_day: {},
+          percent_complete: t.percent_complete,
+          expected_completion_date: t.expected_completion_date,
+        }));
+
+      if (carryInserts.length > 0) {
+        await supabase.from("lookahead_lines").insert(carryInserts);
+        toast({ title: `Carried over ${carryInserts.length} task(s) from last week` });
+      }
+    }
+
     setCreating(false);
     navigate(`/projects/${projectId}/lookahead/${la.id}`);
   };
 
-  if (!project) {
+  const handleCarryOverConfirm = () => {
+    setShowCarryOverDialog(false);
+    setPendingCreate(true);
+  };
+
+  // Trigger create after carry-over dialog confirmed
+  useEffect(() => {
+    if (pendingCreate) {
+      handleCreate();
+    }
+  }, [pendingCreate]);
+
+  const toggleCarryOverTask = (id: string) => {
+    setCarryOverTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, selected: !t.selected } : t))
+    );
+  };
+
+  const toggleAll = (selected: boolean) => {
+    setCarryOverTasks((prev) => prev.map((t) => ({ ...t, selected })));
+  };
+
+  if (!project || !weekStart) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -189,6 +350,12 @@ export default function NewLookAhead() {
               onChange={(e) => setWeekStart(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+            {previousLookahead && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Continues from previous look-ahead starting{" "}
+                {format(parseISO(previousLookahead.week_start_date), "MMM d, yyyy")}
+              </p>
+            )}
           </div>
           <div className="rounded-lg bg-muted p-4">
             <p className="text-sm">
@@ -196,12 +363,78 @@ export default function NewLookAhead() {
               {taskCount === 0 && " Upload a schedule first to auto-populate tasks."}
             </p>
           </div>
+          {carryOverTasks.length > 0 && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm font-medium">
+                {carryOverTasks.length} incomplete task(s) from last week's planning week available for carry-over.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                You'll be able to select which tasks to bring forward when you create.
+              </p>
+            </div>
+          )}
           <Button onClick={handleCreate} disabled={creating} className="w-full">
             {creating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarDays className="h-4 w-4 mr-2" />}
             Create Look-Ahead
           </Button>
         </CardContent>
       </Card>
+
+      {/* Carry-Over Confirmation Dialog */}
+      <Dialog open={showCarryOverDialog} onOpenChange={setShowCarryOverDialog}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Carry Over Incomplete Tasks</DialogTitle>
+            <DialogDescription>
+              These tasks had non-complete statuses in last week's planning week. Select which to bring forward.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between py-2 border-b">
+              <span className="text-xs font-medium text-muted-foreground">
+                {carryOverTasks.filter((t) => t.selected).length} of {carryOverTasks.length} selected
+              </span>
+              <div className="flex gap-2">
+                <button className="text-xs text-primary hover:underline" onClick={() => toggleAll(true)}>Select all</button>
+                <button className="text-xs text-muted-foreground hover:underline" onClick={() => toggleAll(false)}>Clear</button>
+              </div>
+            </div>
+            {carryOverTasks.map((task) => (
+              <label
+                key={task.id}
+                className="flex items-start gap-3 py-2 px-1 rounded hover:bg-accent/30 cursor-pointer"
+              >
+                <Checkbox
+                  checked={task.selected}
+                  onCheckedChange={() => toggleCarryOverTask(task.id)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{task.task_name}</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {task.assigned_trade && <span>{task.assigned_trade}</span>}
+                    {task.percent_complete > 0 && <span>{task.percent_complete}% complete</span>}
+                    {task.expected_completion_date && (
+                      <span>Due {format(parseISO(task.expected_completion_date), "MMM d")}</span>
+                    )}
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              toggleAll(false);
+              handleCarryOverConfirm();
+            }}>
+              Skip
+            </Button>
+            <Button onClick={handleCarryOverConfirm}>
+              Carry Over ({carryOverTasks.filter((t) => t.selected).length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
