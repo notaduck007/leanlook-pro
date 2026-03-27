@@ -149,6 +149,12 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
             {isHidden && showHidden && (
               <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
+            {line.isCarryOver && (
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0" title="Carried over from previous look-ahead">
+                <RotateCcw className="h-2.5 w-2.5" />
+                CO
+              </span>
+            )}
             {readOnly ? (
               <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
                 {line.task_name || line.custom_text || "—"}
