@@ -1,15 +1,34 @@
 import React, { useState, useMemo } from "react";
-import { StatusCell, DayStatus } from "./StatusCell";
+import { StatusCell, DayStatus, StatusCellTooltipData } from "./StatusCell";
 import { StatusDetailPopover } from "./StatusDetailPopover";
 import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { format, parseISO } from "date-fns";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 
 import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
 import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/MasterAutocomplete";
 import { MasterTaskRecord } from "@/hooks/useMasterTasks";
 import { supabase } from "@/integrations/supabase/client";
+
+export interface CarryOverDataInfo {
+  previous_lookahead_id?: string;
+  previous_percent_complete?: number;
+  previous_status_summary?: Record<string, number>;
+  previous_last_status?: string;
+  carried_over_at?: string;
+  carry_over_reason?: string;
+  parent_task_name?: string;
+  siblings_carried?: number;
+  siblings_completed?: number;
+  previous_week_start?: string;
+}
 
 export interface LookaheadLineData {
   id: string;
@@ -31,6 +50,7 @@ export interface LookaheadLineData {
   percent_complete?: number;
   expected_completion_date?: string | null;
   isCarryOver?: boolean;
+  carry_over_data?: CarryOverDataInfo | null;
 }
 
 interface LookaheadRowProps {
@@ -48,7 +68,6 @@ interface LookaheadRowProps {
   readOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
-  
   masterTasks?: MasterTaskRecord[];
   showHidden?: boolean;
 }
@@ -86,7 +105,6 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
 
   const handleTaskNameSelect = (name: string, itemId: string | null) => {
     if (onNameChange) onNameChange(line.id, name);
-    // Smart defaults: if a master task has default_trade, auto-fill
     if (itemId) {
       const mt = masterTasks.find(t => t.id === itemId);
       if (mt?.default_trade && !line.assigned_trade) {
@@ -106,8 +124,46 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
     return { id: data.id, primaryText: data.name, secondaryText: data.category || undefined };
   };
 
-
   const isHidden = line.hidden === true;
+  const hasCarryOverData = !!line.carry_over_data;
+  const isCarriedOver = line.isCarryOver || hasCarryOverData;
+  const co = line.carry_over_data;
+
+  // Build tooltip data for status cells
+  const tooltipData: StatusCellTooltipData = {
+    taskName: line.task_name || line.custom_text || "Untitled",
+    assignedTrade: line.assigned_trade || "",
+    notes: line.notes || "",
+    materialsNeeded: line.materials_needed || "",
+    constraints: line.constraints || "",
+    statusPerDay: line.status_per_day,
+  };
+
+  // Carry-over badge tooltip content
+  const carryOverTooltipContent = co ? (() => {
+    const prevWeek = co.previous_week_start ? format(parseISO(co.previous_week_start), "MMM d, yyyy") : "previous week";
+    const prevPct = co.previous_percent_complete ?? 0;
+    const summary = co.previous_status_summary || {};
+    const reason = co.carry_over_reason === "not_started" ? "Task was not started" : `Task was partially complete (${prevPct}%)`;
+    const parts: string[] = [
+      `Carried over from ${prevWeek}`,
+      `Previous progress: ${prevPct}%`,
+    ];
+    if (Object.keys(summary).length > 0) {
+      const summaryParts = Object.entries(summary).map(([k, v]) => `${v} ${k}`).join(", ");
+      parts.push(`Previous status: ${summaryParts}`);
+    }
+    parts.push(reason);
+    if (co.siblings_carried) {
+      parts.push(`${co.siblings_completed ?? 0} of ${(co.siblings_completed ?? 0) + co.siblings_carried} subtasks completed last week`);
+    }
+    return parts;
+  })() : null;
+
+  // Count carried-over subtasks for collapsed display
+  const carriedChildCount = collapsed && hasChildren
+    ? (line.children || []).filter(c => c.isCarryOver || c.carry_over_data).length
+    : 0;
 
   return (
     <>
@@ -117,7 +173,8 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         className={cn(
           "border-b border-border hover:bg-muted/30 transition-colors group/row",
           line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
-          line.isCarryOver && !line.is_parent && "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
+          isCarriedOver && !line.is_parent && "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
+          isCarriedOver && line.is_parent && "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
           isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
           isHidden && "opacity-40"
@@ -149,15 +206,43 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
             {isHidden && showHidden && (
               <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
-            {line.isCarryOver && (
-              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0" title="Carried over from previous look-ahead">
-                <RotateCcw className="h-2.5 w-2.5" />
-                CO
-              </span>
+            {isCarriedOver && !isSubtask && (
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0 cursor-help">
+                    <RotateCcw className="h-2.5 w-2.5" />
+                    CO
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6} className="max-w-[260px]">
+                  <div className="space-y-1 p-1">
+                    {carryOverTooltipContent ? (
+                      carryOverTooltipContent.map((line, i) => (
+                        <p key={i} className={cn("text-xs", i === 0 ? "font-semibold" : "text-muted-foreground")}>
+                          {line}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-xs">Carried over from previous look-ahead</p>
+                    )}
+                    {co && co.previous_percent_complete !== undefined && (
+                      <div className="h-1 rounded-full bg-muted overflow-hidden mt-1">
+                        <div
+                          className={cn("h-full rounded-full", co.previous_percent_complete >= 80 ? "bg-green-500" : co.previous_percent_complete >= 50 ? "bg-yellow-500" : "bg-red-500")}
+                          style={{ width: `${co.previous_percent_complete}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
             )}
             {readOnly ? (
               <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
                 {line.task_name || line.custom_text || "—"}
+                {collapsed && carriedChildCount > 0 && (
+                  <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">({carriedChildCount} carried-over subtask{carriedChildCount > 1 ? "s" : ""})</span>
+                )}
               </span>
             ) : (
               <div className="flex-1 min-w-0">
@@ -253,7 +338,6 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                     status={(line.status_per_day[date] as DayStatus) || ""}
                     onChange={(s) => {
                       onStatusChange(line.id, date, s);
-                      // Show popover for non-complete statuses
                       if (s === "N" || s === "50" || s === "planned" || s === "progress") {
                         setPopoverLineId(cellKey);
                       } else {
@@ -267,6 +351,8 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                     onNavigate={onNavigate}
                     percentComplete={line.percent_complete}
                     expectedDate={line.expected_completion_date}
+                    date={date}
+                    tooltipData={tooltipData}
                   />
                 </StatusDetailPopover>
               </td>
@@ -288,7 +374,6 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           )}
         </td>
 
-        {/* Materials */}
         {/* Root Cause */}
         <td className="py-1.5 px-1 min-w-[100px]">
           {readOnly ? (
@@ -356,7 +441,6 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           readOnly={readOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
-          
           masterTasks={masterTasks}
           showHidden={showHidden}
         />
