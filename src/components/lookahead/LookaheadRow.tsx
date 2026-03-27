@@ -335,6 +335,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           key={child.id}
           line={child}
           dates={dates}
+          todayStr={todayStr}
           onStatusChange={onStatusChange}
           onFieldChange={onFieldChange}
           onDeleteLine={onDeleteLine}
