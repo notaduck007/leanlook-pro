@@ -960,12 +960,6 @@ export default function LookAheadEditor() {
                 <Button variant="outline" size="sm" onClick={handlePullFromLastWeek}>
                   <Copy className="mr-1 h-3.5 w-3.5" /> Pull Last Week
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSmartFill}>
-                  <Sparkles className="mr-1 h-3.5 w-3.5" /> Smart Fill
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleAddCustomLine}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Add Line
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
                   <Save className="mr-1 h-3.5 w-3.5" /> {saveStatus === "saving" ? "Saving..." : "Save"}
                 </Button>
@@ -985,15 +979,6 @@ export default function LookAheadEditor() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleSmartFill}>
-                      <Sparkles className="mr-2 h-4 w-4" /> Smart Fill
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handlePullFromLastWeek}>
-                      <Copy className="mr-2 h-4 w-4" /> Pull Last Week
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleAddCustomLine}>
-                      <Plus className="mr-2 h-4 w-4" /> Add Line
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => saveDraft()} disabled={saveStatus === "saving"}>
                       <Save className="mr-2 h-4 w-4" /> Save Now
                     </DropdownMenuItem>
