@@ -94,7 +94,8 @@ export default function NewLookAhead() {
       });
   }, [projectId, weekStart]);
 
-  // Load carry-over candidates from previous lookahead's Week 2
+  // Load carry-over candidates from previous lookahead
+  // Includes: Week 2 non-complete statuses OR tasks with expected_completion_date beyond the new window
   useEffect(() => {
     if (!previousLookahead) return;
 
@@ -103,6 +104,9 @@ export default function NewLookAhead() {
       const week2Dates = Array.from({ length: 7 }, (_, i) =>
         format(addDays(prevStart, 7 + i), "yyyy-MM-dd")
       );
+
+      // New lookahead's end date (2 weeks from weekStart)
+      const newEndDate = weekStart ? addDays(parseISO(weekStart), 13) : null;
 
       const { data: prevLines } = await supabase
         .from("lookahead_lines")
@@ -122,7 +126,7 @@ export default function NewLookAhead() {
         taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
       }
 
-      // Find lines with Week 2 non-complete statuses
+      // Find lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
       const candidates: CarryOverTask[] = [];
       for (const line of prevLines) {
         const statusPerDay = (line.status_per_day as Record<string, string>) || {};
@@ -131,7 +135,11 @@ export default function NewLookAhead() {
           return s === "N" || s === "50" || s === "planned" || s === "progress";
         });
 
-        if (hasWeek2NonComplete) {
+        // Check if expected_completion_date exceeds the new 2-week window
+        const expectedDate = line.expected_completion_date ? parseISO(line.expected_completion_date) : null;
+        const exceedsNewWindow = expectedDate && newEndDate ? isAfter(expectedDate, newEndDate) : false;
+
+        if (hasWeek2NonComplete || exceedsNewWindow) {
           candidates.push({
             id: line.id,
             task_name: line.task_id ? taskMap[line.task_id]?.name || "Unknown" : line.custom_text || "Custom Task",
@@ -141,8 +149,8 @@ export default function NewLookAhead() {
             materials_needed: line.materials_needed,
             constraints: line.constraints,
             notes: line.notes,
-            percent_complete: (line as any).percent_complete || 0,
-            expected_completion_date: (line as any).expected_completion_date || null,
+            percent_complete: line.percent_complete || 0,
+            expected_completion_date: line.expected_completion_date || null,
             selected: true,
           });
         }
@@ -152,7 +160,7 @@ export default function NewLookAhead() {
     };
 
     loadCarryOver();
-  }, [previousLookahead]);
+  }, [previousLookahead, weekStart]);
 
   const handleCreate = async () => {
     if (!projectId || !user || !profile?.company_id) return;
