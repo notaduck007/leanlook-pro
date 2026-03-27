@@ -1257,16 +1257,24 @@ export default function LookAheadEditor() {
                     {dates.map((date, i) => {
                       const d = parseISO(date);
                       const isWeekend = [0, 6].includes(d.getDay());
+                      const isToday = date === todayStr;
                       return (
                         <React.Fragment key={date}>
                           {i === 7 && (
                             <th className="w-2 min-w-[8px] bg-border/40" />
                           )}
                           <th
-                            className={`py-1 px-0.5 text-center font-medium text-muted-foreground text-[10px] leading-tight min-w-[36px] ${
-                              isWeekend ? "bg-muted/80" : ""
-                            }`}
+                            className={cn(
+                              "py-1 px-0.5 text-center font-medium text-[10px] leading-tight min-w-[36px]",
+                              isWeekend && "bg-muted/80",
+                              isToday
+                                ? "bg-primary/15 text-primary border-x-2 border-t-2 border-primary/40 font-bold"
+                                : "text-muted-foreground"
+                            )}
                           >
+                            {isToday && (
+                              <div className="text-[8px] uppercase tracking-widest font-black text-primary mb-0.5">Today</div>
+                            )}
                             <div>{format(d, "EEE")}</div>
                             <div>{format(d, "M/d")}</div>
                           </th>
