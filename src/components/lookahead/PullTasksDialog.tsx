@@ -263,6 +263,8 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
   const buildDateTaskTree = (rawTasks: any[]): TaskPreview[] => {
     const taskMap = new Map<string, TaskPreview>();
     rawTasks.forEach((t) => {
+      const overlap = computeOverlapDays(t.start_date, t.finish_date);
+      const shouldSelect = !existingTaskIds.has(t.id) && (overlap > 0 || hasLookaheadOverlap(t, taskMap, rawTasks));
       taskMap.set(t.id, {
         id: t.id,
         name: t.name,
@@ -270,9 +272,9 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         finish_date: t.finish_date,
         tags: (t.tags as string[]) || [],
         parent_id: t.parent_id,
-        selected: !existingTaskIds.has(t.id) && computeOverlapDays(t.start_date, t.finish_date) > 0,
+        selected: shouldSelect,
         children: [],
-        overlapDays: computeOverlapDays(t.start_date, t.finish_date),
+        overlapDays: overlap,
       });
     });
 
@@ -284,6 +286,14 @@ export function PullTasksDialog({ projectId, lookaheadId, companyId, existingTas
         topLevel.push(task);
       }
     });
+
+    // Auto-select parents if any child is selected
+    topLevel.forEach((parent) => {
+      if (!parent.selected && !existingTaskIds.has(parent.id) && parent.children.some(c => c.selected)) {
+        parent.selected = true;
+      }
+    });
+
     return topLevel;
   };
 
