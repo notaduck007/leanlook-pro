@@ -39,8 +39,7 @@ interface PDFRow {
 
 function buildHierarchicalRows(
   lines: LookaheadLineData[],
-  dates: string[],
-  comparisonData?: ComparisonData | null
+  dates: string[]
 ): PDFRow[] {
   // Group by parent
   const parentLines: LookaheadLineData[] = [];
