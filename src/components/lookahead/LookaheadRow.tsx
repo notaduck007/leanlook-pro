@@ -158,9 +158,6 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                 />
               </div>
             )}
-            {comparisonData && (
-              <ComparisonIndicator lineTaskId={line.task_id} lineCustomText={line.custom_text} comparisonData={comparisonData} />
-            )}
             {!readOnly && !isSubtask && onAddSubtask && (
               <button
                 onClick={() => onAddSubtask(line.id)}
