@@ -23,6 +23,7 @@ interface CarryOverTask {
   notes: string | null;
   percent_complete: number;
   expected_completion_date: string | null;
+  status_per_day: Record<string, string>;
   selected: boolean;
 }
 
@@ -152,6 +153,7 @@ export default function NewLookAhead() {
             notes: line.notes,
             percent_complete: line.percent_complete || 0,
             expected_completion_date: line.expected_completion_date || null,
+            status_per_day: statusPerDay,
             selected: true,
           });
         }
@@ -291,7 +293,18 @@ export default function NewLookAhead() {
           constraints: t.constraints,
           notes: `Carried over: ${t.notes || ""}`.trim(),
           sort_order: 1000 + i,
-          status_per_day: {},
+          status_per_day: (() => {
+            // Carry over statuses from previous lookahead that fall within the new 2-week window
+            const newStart = parseISO(weekStart);
+            const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
+            const carried: Record<string, string> = {};
+            for (const d of newDates) {
+              if (t.status_per_day[d]) {
+                carried[d] = t.status_per_day[d];
+              }
+            }
+            return carried;
+          })(),
           percent_complete: t.percent_complete,
           expected_completion_date: t.expected_completion_date,
         }));
