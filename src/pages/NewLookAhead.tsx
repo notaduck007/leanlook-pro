@@ -431,7 +431,7 @@ export default function NewLookAhead() {
           <DialogHeader>
             <DialogTitle>Carry Over Incomplete Tasks</DialogTitle>
             <DialogDescription>
-              These tasks had non-complete statuses in last week's planning week. Select which to bring forward.
+              These tasks are incomplete or have expected completion dates beyond this look-ahead window. Select which to carry forward — they will persist until completed or dates are updated.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1">
