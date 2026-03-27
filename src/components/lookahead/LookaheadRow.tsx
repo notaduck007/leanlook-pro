@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
 import { StatusDetailPopover } from "./StatusDetailPopover";
-import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -30,6 +30,7 @@ export interface LookaheadLineData {
   hidden?: boolean;
   percent_complete?: number;
   expected_completion_date?: string | null;
+  isCarryOver?: boolean;
 }
 
 interface LookaheadRowProps {
@@ -116,9 +117,9 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         className={cn(
           "border-b border-border hover:bg-muted/30 transition-colors group/row",
           line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
+          line.isCarryOver && !line.is_parent && "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
           isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
-          
           isHidden && "opacity-40"
         )}
       >
@@ -147,6 +148,12 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
             {isSubtask && <span className="text-muted-foreground text-xs mr-0.5">↳</span>}
             {isHidden && showHidden && (
               <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
+            {line.isCarryOver && (
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0" title="Carried over from previous look-ahead">
+                <RotateCcw className="h-2.5 w-2.5" />
+                CO
+              </span>
             )}
             {readOnly ? (
               <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
