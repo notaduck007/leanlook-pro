@@ -68,14 +68,15 @@ export function StatusDetailPopover({
     <div ref={containerRef} className="relative inline-flex">
       {children}
       {open && (
-        <div className="absolute left-full top-0 ml-1 z-50 w-52 rounded-md border bg-popover p-3 shadow-md space-y-3 text-popover-foreground">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <div className="absolute left-full top-0 ml-1 z-50 rounded-lg border border-border bg-popover p-4 shadow-lg space-y-4 text-popover-foreground"
+             style={{ width: showCalendar ? 'auto' : '13rem' }}>
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             {statusLabel} Details
           </p>
 
           {/* Percent Complete */}
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">% Complete</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">% Complete</label>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -92,12 +93,12 @@ export function StatusDetailPopover({
                   e.stopPropagation();
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-16 text-sm bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-14 text-sm bg-background border border-border rounded-md px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <span className="text-xs text-muted-foreground">%</span>
-              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-primary transition-all"
+                  className="h-full rounded-full bg-primary transition-all duration-200"
                   style={{ width: `${localPercent}%` }}
                 />
               </div>
@@ -105,19 +106,21 @@ export function StatusDetailPopover({
           </div>
 
           {/* Expected Completion Date */}
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Expected Completion</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Expected Completion</label>
             {showCalendar ? (
-              <Calendar
-                mode="single"
-                selected={expectedCompletionDate ? parseISO(expectedCompletionDate) : undefined}
-                onSelect={(date) => {
-                  onDateChange(date ? format(date, "yyyy-MM-dd") : null);
-                  setShowCalendar(false);
-                }}
-                className={cn("p-2 pointer-events-auto rounded border")}
-                initialFocus
-              />
+              <div className="pt-1">
+                <Calendar
+                  mode="single"
+                  selected={expectedCompletionDate ? parseISO(expectedCompletionDate) : undefined}
+                  onSelect={(date) => {
+                    onDateChange(date ? format(date, "yyyy-MM-dd") : null);
+                    setShowCalendar(false);
+                  }}
+                  className={cn("p-2 pointer-events-auto rounded-md border border-border bg-background")}
+                  initialFocus
+                />
+              </div>
             ) : (
               <Button
                 variant="outline"
@@ -128,15 +131,15 @@ export function StatusDetailPopover({
                   setShowCalendar(true);
                 }}
               >
-                <CalendarIcon className="mr-1.5 h-3 w-3" />
+                <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
                 {expectedCompletionDate
                   ? format(parseISO(expectedCompletionDate), "MMM d, yyyy")
                   : "Set date"}
               </Button>
             )}
-            {expectedCompletionDate && (
+            {expectedCompletionDate && !showCalendar && (
               <button
-                className="text-[10px] text-muted-foreground hover:text-destructive"
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDateChange(null);
