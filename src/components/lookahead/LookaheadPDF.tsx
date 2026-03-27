@@ -103,8 +103,7 @@ export async function generateLookaheadPDF(
   weekStart: string,
   superName: string,
   lines: LookaheadLineData[],
-  dates: string[],
-  comparisonData?: ComparisonData | null
+  dates: string[]
 ): Promise<void> {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
