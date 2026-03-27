@@ -231,16 +231,33 @@ export function LookaheadRow({ line, dates, onStatusChange, onFieldChange, onDel
                 <td className="w-2 min-w-[8px] bg-border/40" />
               )}
               <td className={cn("py-1 px-0.5 text-center", cellBg)}>
-                <StatusCell
+                <StatusDetailPopover
+                  open={popoverLineId === cellKey}
+                  onOpenChange={(open) => setPopoverLineId(open ? cellKey : null)}
+                  percentComplete={line.percent_complete || 0}
+                  expectedCompletionDate={line.expected_completion_date || null}
+                  onPercentChange={(v) => onPercentChange?.(line.id, v)}
+                  onDateChange={(d) => onExpectedDateChange?.(line.id, d)}
                   status={(line.status_per_day[date] as DayStatus) || ""}
-                  onChange={(s) => onStatusChange(line.id, date, s)}
-                  isWeekend={isWeekend}
-                  readOnly={readOnly}
-                  cellKey={cellKey}
-                  onRegisterRef={onRegisterRef}
-                  onNavigate={onNavigate}
-                />
-              </td>
+                >
+                  <StatusCell
+                    status={(line.status_per_day[date] as DayStatus) || ""}
+                    onChange={(s) => {
+                      onStatusChange(line.id, date, s);
+                      // Show popover for non-complete statuses
+                      if (s === "N" || s === "50" || s === "planned" || s === "progress") {
+                        setPopoverLineId(cellKey);
+                      } else {
+                        setPopoverLineId(null);
+                      }
+                    }}
+                    isWeekend={isWeekend}
+                    readOnly={readOnly}
+                    cellKey={cellKey}
+                    onRegisterRef={onRegisterRef}
+                    onNavigate={onNavigate}
+                  />
+                </StatusDetailPopover>
             </React.Fragment>
           );
         })}
