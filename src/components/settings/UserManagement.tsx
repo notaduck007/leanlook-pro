@@ -71,8 +71,16 @@ export function UserManagement() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState<AppRole>("super");
+  const [inviteCompanyId, setInviteCompanyId] = useState("");
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [inviting, setInviting] = useState(false);
+
+  const fetchCompanies = useCallback(async () => {
+    const { data } = await supabase.from("companies").select("id, name");
+    setCompanies(data || []);
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     if (!profile?.company_id) return;
@@ -109,6 +117,7 @@ export function UserManagement() {
   }, [profile?.company_id]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
 
   // Sort & filter
   const filtered = users
@@ -156,28 +165,40 @@ export function UserManagement() {
   // --- Invite user ---
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
+    if (!invitePassword.trim()) {
+      toast({ title: "Password is required", variant: "destructive" });
+      return;
+    }
+    if (invitePassword.length < 6) {
+      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
     setInviting(true);
     try {
       const res = await supabase.functions.invoke("invite-user", {
         body: {
           email: inviteEmail.trim(),
+          password: invitePassword,
           role: inviteRole,
           display_name: inviteName.trim() || null,
+          company_id: inviteCompanyId || null,
         },
       });
 
       if (res.error || res.data?.error) {
         toast({
-          title: "Invite failed",
+          title: "Failed to create user",
           description: res.data?.error || res.error?.message || "Unknown error",
           variant: "destructive",
         });
       } else {
-        toast({ title: "User invited successfully", description: `Invite sent to ${inviteEmail}` });
+        toast({ title: "User created successfully", description: `${inviteEmail} can now sign in.` });
         setInviteOpen(false);
         setInviteEmail("");
         setInviteName("");
+        setInvitePassword("");
         setInviteRole("super");
+        setInviteCompanyId("");
         fetchUsers();
       }
     } catch (err: any) {
@@ -457,10 +478,10 @@ export function UserManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" /> Add User
+              <UserPlus className="h-5 w-5" /> Create User
             </DialogTitle>
             <DialogDescription>
-              Invite a new user by email or add an existing user to your organization.
+              Create a new user account directly. They can sign in immediately with the credentials you set.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -478,6 +499,15 @@ export function UserManagement() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                type="password"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Display Name</Label>
               <Input
                 value={inviteName}
@@ -486,7 +516,25 @@ export function UserManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Initial Role</Label>
+              <Label>Company</Label>
+              <Select value={inviteCompanyId} onValueChange={setInviteCompanyId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Your company (default)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Leave as default to add to your company.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
               <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as AppRole)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -496,24 +544,19 @@ export function UserManagement() {
                     const cfg = ROLE_CONFIG[role];
                     return (
                       <SelectItem key={role} value={role}>
-                        <span className="flex items-center gap-2">
-                          {cfg.label}
-                        </span>
+                        {cfg.label}
                       </SelectItem>
                     );
                   })}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                You can change roles later from the user list.
-              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
+            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim() || !invitePassword.trim()}>
               {inviting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {inviting ? "Inviting..." : "Add User"}
+              {inviting ? "Creating..." : "Create User"}
             </Button>
           </DialogFooter>
         </DialogContent>
