@@ -1289,10 +1289,6 @@ export default function LookAheadEditor() {
 
 
 
-      {/* Removed tasks section (comparison mode) */}
-      {showComparison && comparisonData && (
-        <RemovedTasksSection removedLines={comparisonData.removedLines} />
-      )}
 
       {/* Three-button Delete/Hide Modal */}
       <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
