@@ -265,6 +265,8 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                     cellKey={cellKey}
                     onRegisterRef={onRegisterRef}
                     onNavigate={onNavigate}
+                    percentComplete={line.percent_complete}
+                    expectedDate={line.expected_completion_date}
                   />
                 </StatusDetailPopover>
               </td>

@@ -21,9 +21,11 @@ interface StatusCellProps {
   cellKey?: string;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
+  percentComplete?: number;
+  expectedDate?: string | null;
 }
 
-export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate }: StatusCellProps) {
+export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate, percentComplete, expectedDate }: StatusCellProps) {
   const refCallback = useCallback(
     (el: HTMLButtonElement | null) => {
       if (cellKey && onRegisterRef) onRegisterRef(cellKey, el);
@@ -83,6 +85,13 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
     }
   };
 
+  const statusLabel = status === "Y" ? "Complete" : status === "N" ? "Not Done" : status === "50" ? "Partial" : status === "planned" ? "Planned" : status === "progress" ? "In Progress" : "";
+  const tooltipParts: string[] = [];
+  if (statusLabel) tooltipParts.push(statusLabel);
+  if (percentComplete !== undefined && percentComplete > 0) tooltipParts.push(`${percentComplete}% complete`);
+  if (expectedDate) tooltipParts.push(`Due: ${expectedDate}`);
+  const tooltip = tooltipParts.length > 0 ? tooltipParts.join(" · ") : undefined;
+
   return (
     <button
       ref={refCallback}
@@ -91,6 +100,7 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       disabled={readOnly}
+      title={tooltip}
       className={cn(
         "w-10 h-10 md:w-8 md:h-8 min-w-[48px] min-h-[48px] md:min-w-0 md:min-h-0 flex items-center justify-center rounded-md border text-xs font-bold transition-all select-none",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
