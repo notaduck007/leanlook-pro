@@ -330,37 +330,63 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
               {dateIndex === 7 && (
                 <td className="w-2 min-w-[8px] bg-border/40" />
               )}
-              <td className={cn("py-1 px-0.5 text-center", cellBg, isToday && "border-x-2 border-primary/40 bg-primary/5")}>
-                <StatusDetailPopover
-                  open={popoverLineId === cellKey}
-                  onOpenChange={(open) => setPopoverLineId(open ? cellKey : null)}
-                  percentComplete={line.percent_complete || 0}
-                  expectedCompletionDate={line.expected_completion_date || null}
-                  onPercentChange={(v) => onPercentChange?.(line.id, v)}
-                  onDateChange={(d) => onExpectedDateChange?.(line.id, d)}
-                  status={(line.status_per_day[date] as DayStatus) || ""}
+              <td className={cn("py-1 px-0.5 text-center relative", cellBg, isToday && "border-x-2 border-primary/40 bg-primary/5")}>
+                <VarianceReasonPopover
+                  open={variancePopoverLineDate === cellKey}
+                  onOpenChange={(open) => onVariancePopoverChange?.(open ? cellKey : null)}
+                  onSelect={(reason, note) => {
+                    onVarianceChange?.(line.id, reason, note || null);
+                  }}
                 >
-                  <StatusCell
+                  <StatusDetailPopover
+                    open={popoverLineId === cellKey}
+                    onOpenChange={(open) => setPopoverLineId(open ? cellKey : null)}
+                    percentComplete={line.percent_complete || 0}
+                    expectedCompletionDate={line.expected_completion_date || null}
+                    onPercentChange={(v) => onPercentChange?.(line.id, v)}
+                    onDateChange={(d) => onExpectedDateChange?.(line.id, d)}
                     status={(line.status_per_day[date] as DayStatus) || ""}
-                    onChange={(s) => {
-                      onStatusChange(line.id, date, s);
-                      if (s === "N" || s === "50" || s === "planned" || s === "progress") {
-                        setPopoverLineId(cellKey);
-                      } else {
-                        setPopoverLineId(null);
-                      }
-                    }}
-                    isWeekend={isWeekend}
-                    readOnly={readOnly}
-                    cellKey={cellKey}
-                    onRegisterRef={onRegisterRef}
-                    onNavigate={onNavigate}
-                    percentComplete={line.percent_complete}
-                    expectedDate={line.expected_completion_date}
-                    date={date}
-                    tooltipData={tooltipData}
-                  />
-                </StatusDetailPopover>
+                  >
+                    <StatusCell
+                      status={(line.status_per_day[date] as DayStatus) || ""}
+                      onChange={(s) => {
+                        onStatusChange(line.id, date, s);
+                        if (s === "N") {
+                          // Show variance reason popover
+                          onVariancePopoverChange?.(cellKey);
+                          setPopoverLineId(null);
+                        } else if (s === "50" || s === "planned" || s === "progress") {
+                          setPopoverLineId(cellKey);
+                        } else {
+                          setPopoverLineId(null);
+                          // Clear variance if status changed away from N
+                          if (line.variance_reason) {
+                            onVarianceChange?.(line.id, null, null);
+                          }
+                        }
+                      }}
+                      isWeekend={isWeekend}
+                      readOnly={readOnly}
+                      cellKey={cellKey}
+                      onRegisterRef={onRegisterRef}
+                      onNavigate={onNavigate}
+                      percentComplete={line.percent_complete}
+                      expectedDate={line.expected_completion_date}
+                      date={date}
+                      tooltipData={tooltipData}
+                    />
+                  </StatusDetailPopover>
+                </VarianceReasonPopover>
+                {/* Variance indicator dot on N cells */}
+                {(line.status_per_day[date] as DayStatus) === "N" && (
+                  <span className="absolute top-0.5 right-0.5">
+                    {line.variance_reason ? (
+                      <span className={cn("block w-1.5 h-1.5 rounded-full", getVarianceDotColor(line.variance_reason as VarianceReason))} />
+                    ) : (
+                      <AlertTriangle className="h-2.5 w-2.5 text-yellow-500" />
+                    )}
+                  </span>
+                )}
               </td>
             </React.Fragment>
           );
