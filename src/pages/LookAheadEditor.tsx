@@ -1292,8 +1292,9 @@ export default function LookAheadEditor() {
                       <th className="text-left py-0.5 px-2 text-[9px] text-muted-foreground sticky left-0 bg-muted/30 z-30" colSpan={2}>
                         Daily PPC
                       </th>
-                      {dates.map((date, i) => {
+                    {dates.map((date, i) => {
                         const day = ppcStats.perDay[date];
+                        const isToday = date === todayStr;
                         let dotClass = "bg-muted-foreground/20";
                         if (day && day.total > 0) {
                           const ratio = day.completed / day.total;
@@ -1306,7 +1307,7 @@ export default function LookAheadEditor() {
                             {i === 7 && (
                               <th className="w-2 min-w-[8px] bg-border/40" />
                             )}
-                            <th className="py-0.5 px-0.5 text-center">
+                            <th className={cn("py-0.5 px-0.5 text-center", isToday && "border-x-2 border-primary/40 bg-primary/5")}>
                               <div className={`w-2.5 h-2.5 rounded-full mx-auto ${dotClass}`} title={day ? `${day.completed}/${day.total}` : "No tasks"} />
                             </th>
                           </React.Fragment>
