@@ -478,10 +478,10 @@ export function UserManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" /> Add User
+              <UserPlus className="h-5 w-5" /> Create User
             </DialogTitle>
             <DialogDescription>
-              Invite a new user by email or add an existing user to your organization.
+              Create a new user account directly. They can sign in immediately with the credentials you set.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -499,6 +499,15 @@ export function UserManagement() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                type="password"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Display Name</Label>
               <Input
                 value={inviteName}
@@ -507,7 +516,25 @@ export function UserManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Initial Role</Label>
+              <Label>Company</Label>
+              <Select value={inviteCompanyId} onValueChange={setInviteCompanyId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Your company (default)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Leave as default to add to your company.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
               <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as AppRole)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -517,24 +544,19 @@ export function UserManagement() {
                     const cfg = ROLE_CONFIG[role];
                     return (
                       <SelectItem key={role} value={role}>
-                        <span className="flex items-center gap-2">
-                          {cfg.label}
-                        </span>
+                        {cfg.label}
                       </SelectItem>
                     );
                   })}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                You can change roles later from the user list.
-              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
+            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim() || !invitePassword.trim()}>
               {inviting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {inviting ? "Inviting..." : "Add User"}
+              {inviting ? "Creating..." : "Create User"}
             </Button>
           </DialogFooter>
         </DialogContent>
