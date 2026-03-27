@@ -28,6 +28,10 @@ interface CarryOverTask {
   status_per_day: Record<string, string>;
   selected: boolean;
   subtasks: CarryOverSubtask[];
+  // Carry-over progress data
+  previous_percent_complete: number;
+  previous_status_summary: Record<string, number>;
+  carry_over_reason: string;
 }
 
 interface CarryOverSubtask {
@@ -41,6 +45,22 @@ interface CarryOverSubtask {
   percent_complete: number;
   expected_completion_date: string | null;
   status_per_day: Record<string, string>;
+  is_complete: boolean;
+  previous_percent_complete: number;
+  previous_status_summary: Record<string, number>;
+}
+
+function calculateLineProgress(statusPerDay: Record<string, string>) {
+  const statuses = Object.values(statusPerDay);
+  const Y = statuses.filter(s => s === "Y").length;
+  const N = statuses.filter(s => s === "N").length;
+  const fifty = statuses.filter(s => s === "50").length;
+  const progress = statuses.filter(s => s === "progress").length;
+  const planned = statuses.filter(s => s === "planned").length;
+  const totalPlanned = Y + N + fifty + progress + planned;
+  const pctComplete = totalPlanned > 0 ? Math.round((Y / totalPlanned) * 100) : 0;
+  const isComplete = totalPlanned > 0 && Y === totalPlanned;
+  return { Y, N, fifty, progress, planned, totalPlanned, pctComplete, isComplete };
 }
 
 export default function NewLookAhead() {
@@ -63,7 +83,6 @@ export default function NewLookAhead() {
     if (!projectId) return;
     supabase.from("projects").select("*").eq("id", projectId).single().then(({ data }) => setProject(data));
 
-    // Find latest lookahead for this project to auto-set the next week start
     supabase
       .from("look_aheads")
       .select("*")
@@ -74,14 +93,12 @@ export default function NewLookAhead() {
         if (data?.length) {
           const latest = data[0];
           setPreviousLookahead(latest);
-          // Next lookahead starts on Monday of the planning week (week 2 = day 7)
           const prevStart = parseISO(latest.week_start_date);
           const nextStart = addDays(prevStart, 7);
           const formatted = format(nextStart, "yyyy-MM-dd");
           setWeekStart(formatted);
           setRecommendedWeekStart(formatted);
         } else {
-          // No previous lookahead — default to next Monday
           const next = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
           const formatted = format(next, "yyyy-MM-dd");
           setWeekStart(formatted);
@@ -112,18 +129,12 @@ export default function NewLookAhead() {
       });
   }, [projectId, weekStart]);
 
-  // Load carry-over candidates from previous lookahead
-  // Includes: Week 2 non-complete statuses OR tasks with expected_completion_date beyond the new window
+  // Load carry-over candidates from previous lookahead with progress data
   useEffect(() => {
     if (!previousLookahead) return;
 
     const loadCarryOver = async () => {
       const prevStart = parseISO(previousLookahead.week_start_date);
-      const week2Dates = Array.from({ length: 7 }, (_, i) =>
-        format(addDays(prevStart, 7 + i), "yyyy-MM-dd")
-      );
-
-      // New lookahead's end date (2 weeks from weekStart)
       const newEndDate = weekStart ? addDays(parseISO(weekStart), 13) : null;
 
       const { data: prevLines } = await supabase
@@ -148,45 +159,71 @@ export default function NewLookAhead() {
       const parentLines = prevLines.filter((l) => !l.parent_line_id);
       const childLines = prevLines.filter((l) => l.parent_line_id);
 
-      // Find parent lines with Week 2 non-complete statuses OR expected_completion_date beyond new window
-      // Also qualify parents if ANY of their subtasks have non-complete statuses
+      // Build parent → children map
+      const childrenByParent = new Map<string, typeof prevLines>();
+      childLines.forEach((c) => {
+        const existing = childrenByParent.get(c.parent_line_id!) || [];
+        existing.push(c);
+        childrenByParent.set(c.parent_line_id!, existing);
+      });
+
       const candidates: CarryOverTask[] = [];
       for (const line of parentLines) {
         const statusPerDay = (line.status_per_day as Record<string, string>) || {};
-        const hasWeek2NonComplete = week2Dates.some((d) => {
-          const s = statusPerDay[d] as DayStatus;
-          return s === "N" || s === "50" || s === "planned" || s === "progress";
+        const parentProgress = calculateLineProgress(statusPerDay);
+
+        const lineChildren = childrenByParent.get(line.id) || [];
+
+        // Calculate progress for each child
+        const childProgressList = lineChildren.map((child) => {
+          const childSpd = (child.status_per_day as Record<string, string>) || {};
+          const prog = calculateLineProgress(childSpd);
+          return { child, progress: prog };
         });
 
-        // Check if expected_completion_date exceeds the new 2-week window
+        // Determine if this parent qualifies for carry-over
+        let qualifies = false;
+
+        if (lineChildren.length > 0) {
+          // Parent with children: qualifies if ANY child is incomplete
+          const hasIncompleteChild = childProgressList.some(({ progress }) => !progress.isComplete);
+          qualifies = hasIncompleteChild;
+        } else {
+          // Standalone task: qualifies if incomplete
+          qualifies = !parentProgress.isComplete && parentProgress.totalPlanned > 0;
+        }
+
+        // Also check expected_completion_date
         const expectedDate = line.expected_completion_date ? parseISO(line.expected_completion_date) : null;
         const exceedsNewWindow = expectedDate && newEndDate ? isAfter(expectedDate, newEndDate) : false;
+        if (exceedsNewWindow) qualifies = true;
 
-        // Check if any subtask has non-complete statuses in week 2
-        const lineChildren = childLines.filter((c) => c.parent_line_id === line.id);
-        const hasChildNonComplete = lineChildren.some((child) => {
-          const childStatus = (child.status_per_day as Record<string, string>) || {};
-          return week2Dates.some((d) => {
-            const s = childStatus[d] as DayStatus;
-            return s === "N" || s === "50" || s === "planned" || s === "progress";
-          });
-        });
+        // Also qualify if parent has zero planned but children have work
+        if (!qualifies && lineChildren.length === 0 && parentProgress.totalPlanned === 0) {
+          // Task with no statuses set at all — skip
+          continue;
+        }
 
-        if (hasWeek2NonComplete || exceedsNewWindow || hasChildNonComplete) {
-          // Collect ALL subtasks for this parent (not just non-complete ones)
-          const subtasks: CarryOverSubtask[] = lineChildren
-            .map((c) => ({
-              id: c.id,
-              custom_text: c.custom_text,
-              task_id: c.task_id,
-              assigned_trade: c.assigned_trade,
-              materials_needed: c.materials_needed,
-              constraints: c.constraints,
-              notes: c.notes,
-              percent_complete: c.percent_complete || 0,
-              expected_completion_date: c.expected_completion_date || null,
-              status_per_day: (c.status_per_day as Record<string, string>) || {},
-            }));
+        if (qualifies) {
+          // For tasks with children: only carry over INCOMPLETE children
+          const incompleteChildren = childProgressList.filter(({ progress }) => !progress.isComplete);
+          const completeChildCount = childProgressList.filter(({ progress }) => progress.isComplete).length;
+
+          const subtasks: CarryOverSubtask[] = (lineChildren.length > 0 ? incompleteChildren : []).map(({ child, progress }) => ({
+            id: child.id,
+            custom_text: child.custom_text,
+            task_id: child.task_id,
+            assigned_trade: child.assigned_trade,
+            materials_needed: child.materials_needed,
+            constraints: child.constraints,
+            notes: child.notes,
+            percent_complete: child.percent_complete || 0,
+            expected_completion_date: child.expected_completion_date || null,
+            status_per_day: (child.status_per_day as Record<string, string>) || {},
+            is_complete: progress.isComplete,
+            previous_percent_complete: progress.pctComplete,
+            previous_status_summary: { Y: progress.Y, N: progress.N, "50": progress.fifty, progress: progress.progress, planned: progress.planned },
+          }));
 
           candidates.push({
             id: line.id,
@@ -202,9 +239,42 @@ export default function NewLookAhead() {
             status_per_day: statusPerDay,
             selected: true,
             subtasks,
+            previous_percent_complete: parentProgress.pctComplete,
+            previous_status_summary: { Y: parentProgress.Y, N: parentProgress.N, "50": parentProgress.fifty, progress: parentProgress.progress, planned: parentProgress.planned },
+            carry_over_reason: parentProgress.pctComplete === 0 ? "not_started" : "incomplete",
           });
         }
       }
+
+      // Handle orphaned subtasks (parent not in this lookahead)
+      const parentIdsInLines = new Set(parentLines.map(l => l.id));
+      childLines.forEach((child) => {
+        if (!parentIdsInLines.has(child.parent_line_id!)) {
+          console.warn(`Orphaned subtask ${child.id} — parent ${child.parent_line_id} not found in lookahead`);
+          const childSpd = (child.status_per_day as Record<string, string>) || {};
+          const prog = calculateLineProgress(childSpd);
+          if (!prog.isComplete && prog.totalPlanned > 0) {
+            candidates.push({
+              id: child.id,
+              task_name: child.custom_text || "Orphaned Subtask",
+              assigned_trade: child.assigned_trade,
+              task_id: child.task_id,
+              custom_text: child.custom_text,
+              materials_needed: child.materials_needed,
+              constraints: child.constraints,
+              notes: child.notes,
+              percent_complete: child.percent_complete || 0,
+              expected_completion_date: child.expected_completion_date || null,
+              status_per_day: childSpd,
+              selected: true,
+              subtasks: [],
+              previous_percent_complete: prog.pctComplete,
+              previous_status_summary: { Y: prog.Y, N: prog.N, "50": prog.fifty, progress: prog.progress, planned: prog.planned },
+              carry_over_reason: prog.pctComplete === 0 ? "not_started" : "incomplete",
+            });
+          }
+        }
+      });
 
       setCarryOverTasks(candidates);
     };
@@ -215,7 +285,6 @@ export default function NewLookAhead() {
   const handleCreate = async () => {
     if (!projectId || !user || !profile?.company_id) return;
 
-    // If there are carry-over tasks and dialog hasn't been shown, show it first
     if (carryOverTasks.length > 0 && !pendingCreate) {
       setShowCarryOverDialog(true);
       return;
@@ -223,7 +292,6 @@ export default function NewLookAhead() {
 
     setCreating(true);
 
-    // Create the look-ahead
     const { data: la, error } = await supabase
       .from("look_aheads")
       .insert({
@@ -263,7 +331,6 @@ export default function NewLookAhead() {
         .gte("finish_date", weekStart)
         .order("name");
 
-      // Fetch task templates for auto-filling
       const { data: templates } = await supabase
         .from("task_templates")
         .select("*")
@@ -317,11 +384,10 @@ export default function NewLookAhead() {
       }
     }
 
-    // Insert carry-over tasks (with subtasks)
+    // Insert carry-over tasks (with subtasks and carry_over_data)
     const selectedCarryOver = carryOverTasks.filter((t) => t.selected);
     if (selectedCarryOver.length > 0) {
       const existingTaskIdMap = new Map<string, string>();
-      // Get already inserted lines to check for duplicates
       const { data: existingLines } = await supabase
         .from("lookahead_lines")
         .select("id, task_id")
@@ -331,38 +397,64 @@ export default function NewLookAhead() {
       const newStart = parseISO(weekStart);
       const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(newStart, j), "yyyy-MM-dd"));
 
-      // Helper to filter status_per_day to only new lookahead dates
-      const filterStatus = (spd: Record<string, string>) => {
-        const filtered: Record<string, string> = {};
+      // Build planned status for new period (weekdays only)
+      const buildPlannedStatus = () => {
+        const status: Record<string, string> = {};
         for (const d of newDates) {
-          if (spd[d]) filtered[d] = spd[d];
+          const dayOfWeek = parseISO(d).getDay();
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            status[d] = "planned";
+          }
         }
-        return filtered;
+        return status;
       };
+
+      const buildCarryOverData = (t: CarryOverTask) => ({
+        previous_lookahead_id: previousLookahead.id,
+        previous_percent_complete: t.previous_percent_complete,
+        previous_status_summary: t.previous_status_summary,
+        carried_over_at: new Date().toISOString(),
+        carry_over_reason: t.carry_over_reason,
+        previous_week_start: previousLookahead.week_start_date,
+      });
+
+      const buildSubtaskCarryOverData = (st: CarryOverSubtask, parentName: string, siblings: CarryOverSubtask[]) => ({
+        previous_lookahead_id: previousLookahead.id,
+        previous_percent_complete: st.previous_percent_complete,
+        previous_status_summary: st.previous_status_summary,
+        carried_over_at: new Date().toISOString(),
+        carry_over_reason: st.previous_percent_complete === 0 ? "not_started" : "incomplete",
+        parent_task_name: parentName,
+        siblings_carried: siblings.length,
+        siblings_completed: 0, // completed siblings not carried
+        previous_week_start: previousLookahead.week_start_date,
+      });
 
       // Separate into new inserts vs updates for existing schedule-pulled lines
       const carryInserts: any[] = [];
-      const carryUpdates: { lineId: string; data: any; subtasks: CarryOverSubtask[] }[] = [];
+      const carryUpdates: { lineId: string; data: any; subtasks: CarryOverSubtask[]; parentName: string }[] = [];
 
       for (const t of selectedCarryOver) {
-        const carriedStatus = filterStatus(t.status_per_day);
+        const plannedStatus = buildPlannedStatus();
+        const coData = buildCarryOverData(t);
 
         if (t.task_id && existingTaskIdMap.has(t.task_id)) {
-          // Task already exists from schedule pull — update with progress details and statuses
           const existingLineId = existingTaskIdMap.get(t.task_id)!;
           carryUpdates.push({
             lineId: existingLineId,
             data: {
               percent_complete: t.percent_complete,
               expected_completion_date: t.expected_completion_date,
-              notes: t.notes ? `Carried over: ${t.notes}`.trim() : null,
-              status_per_day: carriedStatus,
+              notes: t.notes,
+              carry_over_data: coData,
             },
             subtasks: t.subtasks,
+            parentName: t.task_name,
           });
         } else {
           carryInserts.push({
-            _subtasks: t.subtasks, // temp field, removed before insert
+            _subtasks: t.subtasks,
+            _parentName: t.task_name,
             lookahead_id: la.id,
             company_id: profile.company_id,
             task_id: t.task_id,
@@ -370,30 +462,26 @@ export default function NewLookAhead() {
             assigned_trade: t.assigned_trade,
             materials_needed: t.materials_needed,
             constraints: t.constraints,
-            notes: `Carried over: ${t.notes || ""}`.trim(),
+            notes: t.notes,
             sort_order: 1000 + carryInserts.length,
-            status_per_day: carriedStatus,
+            status_per_day: plannedStatus,
             percent_complete: t.percent_complete,
             expected_completion_date: t.expected_completion_date,
+            carry_over_data: coData,
           });
         }
       }
 
-      // Update existing lines with progress details from previous lookahead
+      // Update existing lines with carry-over data
       for (const upd of carryUpdates) {
-        const { data: fullLine } = await supabase
-          .from("lookahead_lines")
-          .select("status_per_day")
-          .eq("id", upd.lineId)
-          .single();
-        const mergedStatus = { ...((fullLine?.status_per_day as Record<string, string>) || {}), ...upd.data.status_per_day };
         await supabase
           .from("lookahead_lines")
-          .update({ ...upd.data, status_per_day: mergedStatus })
+          .update(upd.data)
           .eq("id", upd.lineId);
 
         // Insert subtasks for updated parent
         if (upd.subtasks.length > 0) {
+          const plannedStatus = buildPlannedStatus();
           const subtaskRows = upd.subtasks.map((st, si) => ({
             lookahead_id: la.id,
             company_id: profile.company_id,
@@ -404,10 +492,11 @@ export default function NewLookAhead() {
             constraints: st.constraints,
             notes: st.notes,
             sort_order: si,
-            status_per_day: filterStatus(st.status_per_day),
+            status_per_day: plannedStatus,
             percent_complete: st.percent_complete,
             expected_completion_date: st.expected_completion_date,
             parent_line_id: upd.lineId,
+            carry_over_data: buildSubtaskCarryOverData(st, upd.parentName, upd.subtasks),
           }));
           await supabase.from("lookahead_lines").insert(subtaskRows);
         }
@@ -415,10 +504,12 @@ export default function NewLookAhead() {
 
       // Insert new carry-over parent lines and their subtasks
       if (carryInserts.length > 0) {
-        const subtasksPerInsert: CarryOverSubtask[][] = carryInserts.map((ci) => {
+        const subtasksPerInsert: { subs: CarryOverSubtask[]; parentName: string }[] = carryInserts.map((ci) => {
           const subs = ci._subtasks || [];
+          const parentName = ci._parentName || "";
           delete ci._subtasks;
-          return subs;
+          delete ci._parentName;
+          return { subs, parentName };
         });
 
         const { data: insertedParents } = await supabase
@@ -426,12 +517,13 @@ export default function NewLookAhead() {
           .insert(carryInserts)
           .select();
 
-        // Insert subtasks for each newly inserted parent
+        // Insert subtasks for each newly inserted parent with re-linked parent_line_id
         if (insertedParents) {
           const allSubtaskRows: any[] = [];
+          const plannedStatus = buildPlannedStatus();
           for (let i = 0; i < insertedParents.length; i++) {
             const parentId = insertedParents[i].id;
-            const subs = subtasksPerInsert[i] || [];
+            const { subs, parentName } = subtasksPerInsert[i];
             for (let si = 0; si < subs.length; si++) {
               const st = subs[si];
               allSubtaskRows.push({
@@ -444,10 +536,11 @@ export default function NewLookAhead() {
                 constraints: st.constraints,
                 notes: st.notes,
                 sort_order: si,
-                status_per_day: filterStatus(st.status_per_day),
+                status_per_day: plannedStatus,
                 percent_complete: st.percent_complete,
                 expected_completion_date: st.expected_completion_date,
                 parent_line_id: parentId,
+                carry_over_data: buildSubtaskCarryOverData(st, parentName, subs),
               });
             }
           }
@@ -458,8 +551,9 @@ export default function NewLookAhead() {
       }
 
       const totalCarried = carryInserts.length + carryUpdates.length;
+      const totalSubtasks = selectedCarryOver.reduce((sum, t) => sum + t.subtasks.length, 0);
       if (totalCarried > 0) {
-        toast({ title: `Carried over ${totalCarried} task(s) with subtasks from last week` });
+        toast({ title: `Carried over ${totalCarried} task(s)${totalSubtasks > 0 ? ` with ${totalSubtasks} subtask(s)` : ""} from last week` });
       }
     }
 
@@ -472,7 +566,6 @@ export default function NewLookAhead() {
     setPendingCreate(true);
   };
 
-  // Trigger create after carry-over dialog confirmed
   useEffect(() => {
     if (pendingCreate) {
       handleCreate();
@@ -488,6 +581,11 @@ export default function NewLookAhead() {
   const toggleAll = (selected: boolean) => {
     setCarryOverTasks((prev) => prev.map((t) => ({ ...t, selected })));
   };
+
+  // Summary counts for carry-over dialog
+  const selectedCarryOverCount = carryOverTasks.filter(t => t.selected).length;
+  const notStartedCount = carryOverTasks.filter(t => t.selected && t.carry_over_reason === "not_started").length;
+  const incompleteCount = carryOverTasks.filter(t => t.selected && t.carry_over_reason !== "not_started").length;
 
   if (!project || !weekStart) {
     return (
@@ -518,7 +616,6 @@ export default function NewLookAhead() {
             <p className="font-medium">{project.name}</p>
           </div>
 
-          {/* Recommended week highlight */}
           {recommendedWeekStart && previousLookahead && (
             <div className="rounded-lg border-2 border-success bg-success/10 p-4">
               <div className="flex items-center gap-2 mb-1">
@@ -608,12 +705,14 @@ export default function NewLookAhead() {
             </p>
           </div>
           {carryOverTasks.length > 0 && (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-              <p className="text-sm font-medium">
-                {carryOverTasks.length} incomplete task(s) available for carry-over.
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                ↩ {carryOverTasks.length} incomplete task(s) will be carried over with progress data
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Includes tasks with non-complete statuses and tasks whose expected completion date extends beyond this window.
+                {carryOverTasks.filter(t => t.subtasks.length > 0).length > 0 &&
+                  `Including ${carryOverTasks.reduce((s, t) => s + t.subtasks.length, 0)} subtask(s). `}
+                Only incomplete subtasks are carried — completed ones are left behind.
               </p>
             </div>
           )}
@@ -630,13 +729,20 @@ export default function NewLookAhead() {
           <DialogHeader>
             <DialogTitle>Carry Over Incomplete Tasks</DialogTitle>
             <DialogDescription>
-              These tasks are incomplete or have expected completion dates beyond this look-ahead window. Select which to carry forward — they will persist until completed or dates are updated.
+              These tasks are incomplete from the previous look-ahead. Select which to carry forward with their progress data. Completed subtasks are automatically excluded.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1">
             <div className="flex items-center justify-between py-2 border-b">
               <span className="text-xs font-medium text-muted-foreground">
-                {carryOverTasks.filter((t) => t.selected).length} of {carryOverTasks.length} selected
+                {selectedCarryOverCount} of {carryOverTasks.length} selected
+                {selectedCarryOverCount > 0 && (
+                  <span className="ml-1">
+                    ({notStartedCount > 0 ? `${notStartedCount} not started` : ""}
+                    {notStartedCount > 0 && incompleteCount > 0 ? ", " : ""}
+                    {incompleteCount > 0 ? `${incompleteCount} partially complete` : ""})
+                  </span>
+                )}
               </span>
               <div className="flex gap-2">
                 <button className="text-xs text-primary hover:underline" onClick={() => toggleAll(true)}>Select all</button>
@@ -655,9 +761,13 @@ export default function NewLookAhead() {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{task.task_name}</p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     {task.assigned_trade && <span>{task.assigned_trade}</span>}
-                    {task.percent_complete > 0 && <span>{task.percent_complete}% complete</span>}
+                    <span className={cn(
+                      task.previous_percent_complete === 0 ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"
+                    )}>
+                      {task.previous_percent_complete}% complete
+                    </span>
                     {task.expected_completion_date && (
                       <span>Due {format(parseISO(task.expected_completion_date), "MMM d")}</span>
                     )}
@@ -665,6 +775,18 @@ export default function NewLookAhead() {
                       <span className="text-primary">+ {task.subtasks.length} subtask{task.subtasks.length > 1 ? "s" : ""}</span>
                     )}
                   </div>
+                  {/* Mini progress bar */}
+                  {task.previous_percent_complete > 0 && (
+                    <div className="h-1 rounded-full bg-muted overflow-hidden mt-1 max-w-[120px]">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          task.previous_percent_complete >= 80 ? "bg-green-500" : task.previous_percent_complete >= 50 ? "bg-yellow-500" : "bg-red-500"
+                        )}
+                        style={{ width: `${task.previous_percent_complete}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </label>
             ))}
@@ -677,7 +799,7 @@ export default function NewLookAhead() {
               Skip
             </Button>
             <Button onClick={handleCarryOverConfirm}>
-              Carry Over ({carryOverTasks.filter((t) => t.selected).length})
+              Carry Over ({selectedCarryOverCount})
             </Button>
           </DialogFooter>
         </DialogContent>
