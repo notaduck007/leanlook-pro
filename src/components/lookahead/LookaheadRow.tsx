@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { StatusCell, DayStatus } from "./StatusCell";
 import { StatusDetailPopover } from "./StatusDetailPopover";
-import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
