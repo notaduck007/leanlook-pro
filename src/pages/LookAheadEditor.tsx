@@ -737,7 +737,7 @@ export default function LookAheadEditor() {
 
     const { data: prevLAs } = await supabase
       .from("look_aheads")
-      .select("id")
+      .select("*")
       .eq("project_id", projectId)
       .lt("week_start_date", lookAhead.week_start_date)
       .order("week_start_date", { ascending: false })
@@ -748,120 +748,210 @@ export default function LookAheadEditor() {
       return;
     }
 
+    const prevLA = prevLAs[0];
     const { data: prevLines } = await supabase
       .from("lookahead_lines")
       .select("*")
-      .eq("lookahead_id", prevLAs[0].id);
+      .eq("lookahead_id", prevLA.id);
 
     if (!prevLines?.length) {
       toast({ title: "No lines to pull forward" });
       return;
     }
 
-    const incompleteLines = prevLines.filter((pl) => {
+    // Calculate completion for each line
+    const lineProgress = new Map<string, { isComplete: boolean; pctComplete: number; summary: Record<string, number> }>();
+    prevLines.forEach((pl) => {
       const statuses = Object.values((pl.status_per_day as Record<string, string>) || {});
-      return statuses.includes("N") || statuses.includes("planned") || statuses.includes("progress");
+      const Y = statuses.filter(s => s === "Y").length;
+      const N = statuses.filter(s => s === "N").length;
+      const fifty = statuses.filter(s => s === "50").length;
+      const progress = statuses.filter(s => s === "progress").length;
+      const planned = statuses.filter(s => s === "planned").length;
+      const total = Y + N + fifty + progress + planned;
+      const pct = total > 0 ? Math.round((Y / total) * 100) : 0;
+      lineProgress.set(pl.id, {
+        isComplete: total > 0 && Y === total,
+        pctComplete: pct,
+        summary: { Y, N, "50": fifty, progress, planned },
+      });
     });
 
-    if (!incompleteLines.length) {
+    // Group by parent/child
+    const parentLines = prevLines.filter(l => !l.parent_line_id);
+    const childLines = prevLines.filter(l => l.parent_line_id);
+    const childrenByParent = new Map<string, typeof prevLines>();
+    childLines.forEach(c => {
+      const arr = childrenByParent.get(c.parent_line_id!) || [];
+      arr.push(c);
+      childrenByParent.set(c.parent_line_id!, arr);
+    });
+
+    // Determine what to carry over
+    const carryParents: typeof prevLines = [];
+    const carryChildren: typeof prevLines = [];
+
+    for (const parent of parentLines) {
+      const children = childrenByParent.get(parent.id) || [];
+      const parentProg = lineProgress.get(parent.id)!;
+
+      if (children.length > 0) {
+        const incompleteKids = children.filter(c => !lineProgress.get(c.id)!.isComplete);
+        if (incompleteKids.length > 0) {
+          carryParents.push(parent);
+          carryChildren.push(...incompleteKids);
+        }
+      } else {
+        if (!parentProg.isComplete && (parentProg.summary.Y + parentProg.summary.N + parentProg.summary["50"] + parentProg.summary.progress + parentProg.summary.planned) > 0) {
+          carryParents.push(parent);
+        }
+      }
+    }
+
+    if (carryParents.length === 0) {
       toast({ title: "All previous tasks were completed!" });
       return;
     }
 
-    const taskIds = incompleteLines.filter((l) => l.task_id).map((l) => l.task_id!);
+    const taskIds = [...carryParents, ...carryChildren].filter(l => l.task_id).map(l => l.task_id!);
     let taskMap: Record<string, any> = {};
     if (taskIds.length > 0) {
       const { data: tasks } = await supabase.from("tasks").select("*").in("id", taskIds);
       taskMap = (tasks || []).reduce((acc, t) => ({ ...acc, [t.id]: t }), {});
     }
 
-    const existingIdMap = new Map(lines.filter((l) => l.task_id).map((l) => [l.task_id, l.id]));
-    const newLines = incompleteLines.filter((l) => !l.task_id || !existingIdMap.has(l.task_id));
-    const updateLines = incompleteLines.filter((l) => l.task_id && existingIdMap.has(l.task_id));
+    const existingIdMap = new Map(lines.filter(l => l.task_id).map(l => [l.task_id, l.id]));
+    const wsDate = parseISO(lookAhead.week_start_date);
+    const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(wsDate, j), "yyyy-MM-dd"));
 
-    // Build carried status helper
-    const buildCarriedStatus = (pl: any) => {
-      const prevStatus = (pl.status_per_day as Record<string, string>) || {};
-      const wsDate = parseISO(lookAhead.week_start_date);
-      const newDates = Array.from({ length: 14 }, (_, j) => format(addDays(wsDate, j), "yyyy-MM-dd"));
-      const carried: Record<string, string> = {};
+    const buildPlannedStatus = () => {
+      const status: Record<string, string> = {};
       for (const d of newDates) {
-        if (prevStatus[d]) carried[d] = prevStatus[d];
+        const dayOfWeek = parseISO(d).getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          status[d] = "planned";
+        }
       }
-      return carried;
+      return status;
     };
 
-    // Update existing lines with progress details from previous lookahead
-    for (const pl of updateLines) {
+    // Insert parents first (filter out already existing)
+    const newParents = carryParents.filter(l => !l.task_id || !existingIdMap.has(l.task_id));
+    const updateParents = carryParents.filter(l => l.task_id && existingIdMap.has(l.task_id));
+
+    // Update existing parents with carry-over data
+    for (const pl of updateParents) {
       const existingLineId = existingIdMap.get(pl.task_id!);
       if (!existingLineId) continue;
-      const carriedStatus = buildCarriedStatus(pl);
-      const existingLine = lines.find((l) => l.id === existingLineId);
-      const mergedStatus = { ...((existingLine?.status_per_day as Record<string, string>) || {}), ...carriedStatus };
+      const prog = lineProgress.get(pl.id)!;
       await supabase
         .from("lookahead_lines")
         .update({
           percent_complete: pl.percent_complete,
           expected_completion_date: pl.expected_completion_date,
-          notes: pl.notes ? `Carried over: ${pl.notes}`.trim() : null,
-          status_per_day: mergedStatus,
+          notes: pl.notes,
+          carry_over_data: {
+            previous_lookahead_id: prevLA.id,
+            previous_percent_complete: prog.pctComplete,
+            previous_status_summary: prog.summary,
+            carried_over_at: new Date().toISOString(),
+            carry_over_reason: prog.pctComplete === 0 ? "not_started" : "incomplete",
+            previous_week_start: prevLA.week_start_date,
+          },
         })
         .eq("id", existingLineId);
     }
 
-    if (!newLines.length && !updateLines.length) {
-      toast({ title: "All carry-over tasks already exist in this look-ahead" });
-      return;
-    }
+    // Build old_parent_id → new_parent_id mapping
+    const oldToNewParentId = new Map<string, string>();
 
-    const inserts = newLines.map((pl, i) => ({
-      lookahead_id: lookaheadId,
-      company_id: profile.company_id,
-      task_id: pl.task_id,
-      custom_text: pl.custom_text,
-      assigned_trade: pl.assigned_trade,
-      materials_needed: pl.materials_needed,
-      constraints: pl.constraints,
-      notes: `Carried over: ${pl.notes || ""}`.trim(),
-      sort_order: lines.length + i,
-      status_per_day: buildCarriedStatus(pl),
-      percent_complete: pl.percent_complete,
-      expected_completion_date: pl.expected_completion_date,
-    }));
+    // Map existing task_id parents
+    updateParents.forEach(pl => {
+      if (pl.task_id && existingIdMap.has(pl.task_id)) {
+        oldToNewParentId.set(pl.id, existingIdMap.get(pl.task_id)!);
+      }
+    });
 
-    let insertedCount = 0;
-    if (inserts.length > 0) {
-      const { data: inserted } = await supabase.from("lookahead_lines").insert(inserts).select();
+    // Insert new parents
+    if (newParents.length > 0) {
+      const plannedStatus = buildPlannedStatus();
+      const parentInserts = newParents.map((pl, i) => {
+        const prog = lineProgress.get(pl.id)!;
+        return {
+          lookahead_id: lookaheadId,
+          company_id: profile.company_id,
+          task_id: pl.task_id,
+          custom_text: pl.custom_text,
+          assigned_trade: pl.assigned_trade,
+          materials_needed: pl.materials_needed,
+          constraints: pl.constraints,
+          notes: pl.notes,
+          sort_order: lines.length + i,
+          status_per_day: plannedStatus,
+          percent_complete: pl.percent_complete,
+          expected_completion_date: pl.expected_completion_date,
+          carry_over_data: {
+            previous_lookahead_id: prevLA.id,
+            previous_percent_complete: prog.pctComplete,
+            previous_status_summary: prog.summary,
+            carried_over_at: new Date().toISOString(),
+            carry_over_reason: prog.pctComplete === 0 ? "not_started" : "incomplete",
+            previous_week_start: prevLA.week_start_date,
+          },
+        };
+      });
 
+      const { data: inserted } = await supabase.from("lookahead_lines").insert(parentInserts).select();
       if (inserted) {
-        const mapped: LookaheadLineData[] = inserted.map((l) => ({
-          id: l.id,
-          task_id: l.task_id,
-          custom_text: l.custom_text,
-          task_name: l.task_id ? taskMap[l.task_id]?.name || "Carry-over Task" : l.custom_text || "Carry-over",
-          assigned_trade: l.assigned_trade,
-          materials_needed: l.materials_needed,
-          constraints: l.constraints,
-          notes: l.notes,
-          photos: [],
-        status_per_day: (l.status_per_day as Record<string, DayStatus>) || {},
-          sort_order: l.sort_order || 0,
-          percent_complete: l.percent_complete || 0,
-          expected_completion_date: l.expected_completion_date || null,
-        }));
-        setLines((prev) => [...prev, ...mapped]);
-        insertedCount = inserted.length;
+        inserted.forEach((newLine, i) => {
+          oldToNewParentId.set(newParents[i].id, newLine.id);
+        });
       }
     }
 
-    // Refresh data to pick up updates
-    if (updateLines.length > 0) {
-      await fetchData();
+    // Insert children with remapped parent_line_id
+    if (carryChildren.length > 0) {
+      const plannedStatus = buildPlannedStatus();
+      const childInserts = carryChildren
+        .filter(c => oldToNewParentId.has(c.parent_line_id!))
+        .map((c, i) => {
+          const prog = lineProgress.get(c.id)!;
+          return {
+            lookahead_id: lookaheadId,
+            company_id: profile.company_id,
+            task_id: c.task_id,
+            custom_text: c.custom_text,
+            assigned_trade: c.assigned_trade,
+            materials_needed: c.materials_needed,
+            constraints: c.constraints,
+            notes: c.notes,
+            sort_order: i,
+            status_per_day: plannedStatus,
+            percent_complete: c.percent_complete,
+            expected_completion_date: c.expected_completion_date,
+            parent_line_id: oldToNewParentId.get(c.parent_line_id!),
+            carry_over_data: {
+              previous_lookahead_id: prevLA.id,
+              previous_percent_complete: prog.pctComplete,
+              previous_status_summary: prog.summary,
+              carried_over_at: new Date().toISOString(),
+              carry_over_reason: prog.pctComplete === 0 ? "not_started" : "incomplete",
+              previous_week_start: prevLA.week_start_date,
+            },
+          };
+        });
+
+      if (childInserts.length > 0) {
+        await supabase.from("lookahead_lines").insert(childInserts).select();
+      }
     }
 
-    const totalCarried = insertedCount + updateLines.length;
+    // Refresh data to pick up all changes
+    await fetchData();
+
+    const totalCarried = newParents.length + updateParents.length + carryChildren.length;
     if (totalCarried > 0) {
-      toast({ title: `Pulled ${totalCarried} incomplete tasks from last week` });
+      toast({ title: `Pulled ${totalCarried} incomplete tasks (with subtasks) from last week` });
     }
   };
 
