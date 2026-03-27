@@ -117,9 +117,9 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         className={cn(
           "border-b border-border hover:bg-muted/30 transition-colors group/row",
           line.is_parent && "border-l-[3px] border-l-primary/50 font-medium",
+          line.isCarryOver && !line.is_parent && "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
           isSubtask && "bg-muted/5",
           isDragging && "bg-accent/40",
-          
           isHidden && "opacity-40"
         )}
       >
