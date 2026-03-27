@@ -792,22 +792,6 @@ export default function LookAheadEditor() {
     }
   };
 
-  const handleToggleComparison = useCallback(async () => {
-    if (showComparison) {
-      setShowComparison(false);
-      setComparisonData(null);
-      return;
-    }
-    if (!projectId || !lookAhead?.week_start_date) return;
-    setLoadingComparison(true);
-    const data = await fetchComparisonData(projectId, lookAhead.week_start_date, lines);
-    setComparisonData(data);
-    setShowComparison(true);
-    setLoadingComparison(false);
-    if (!data) {
-      toast({ title: "No previous look-ahead found for comparison", variant: "destructive" });
-    }
-  }, [showComparison, projectId, lookAhead?.week_start_date, lines, toast]);
 
   // Build hierarchical lines: group subtasks under their parents (memoized to prevent layout jumps)
   const hierarchicalLines = useMemo(() => {
