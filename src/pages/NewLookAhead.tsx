@@ -38,6 +38,7 @@ export default function NewLookAhead() {
   const [carryOverTasks, setCarryOverTasks] = useState<CarryOverTask[]>([]);
   const [showCarryOverDialog, setShowCarryOverDialog] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
+  const [recommendedWeekStart, setRecommendedWeekStart] = useState("");
 
   // Load project and latest lookahead to determine next week start
   useEffect(() => {
