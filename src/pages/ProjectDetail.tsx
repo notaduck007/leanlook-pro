@@ -393,6 +393,49 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Version Dialog */}
+      <Dialog open={!!editingVersion} onOpenChange={(open) => !open && setEditingVersion(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Schedule Version</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Version Number</Label>
+              <Input type="number" min={1} value={editVersionNumber} onChange={(e) => setEditVersionNumber(e.target.value)} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Uploaded: {editingVersion && new Date(editingVersion.uploaded_at).toLocaleString()}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingVersion(null)}>Cancel</Button>
+            <Button onClick={handleUpdateVersion}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Version Confirmation */}
+      <AlertDialog open={!!deleteVersionId} onOpenChange={(open) => !open && setDeleteVersionId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Schedule Version?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this schedule version and all its parsed tasks. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteVersionId && handleDeleteVersion(deleteVersionId)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
