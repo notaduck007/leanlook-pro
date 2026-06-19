@@ -106,20 +106,11 @@ export default function Analytics() {
   const profileMap = useMemo(() => new Map(profiles.map((p) => [p.user_id, p.display_name || "Unknown"])), [profiles]);
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t.name])), [tasks]);
 
-  // Compute PPC for a set of lines
+  // Use shared canonical PPC helper. The local alias `planned` maps to
+  // the helper's `resolved` count for backward compatibility with the UI.
   const computePPC = (lineSet: LineRow[]): { completed: number; planned: number; ppc: number } => {
-    let completed = 0;
-    let planned = 0;
-    lineSet.forEach((l) => {
-      const spd = l.status_per_day || {};
-      Object.values(spd).forEach((s) => {
-        if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
-          planned++;
-          if (s === "Y") completed++;
-        }
-      });
-    });
-    return { completed, planned, ppc: planned > 0 ? Math.round((completed / planned) * 100) : 0 };
+    const { completed, resolved, ppc } = sharedComputePPC(lineSet);
+    return { completed, planned: resolved, ppc };
   };
 
   // Company-wide PPC

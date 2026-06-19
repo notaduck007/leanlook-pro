@@ -106,21 +106,7 @@ export function LeanTrackingAnalytics({ projectId, ppcGoal }: LeanTrackingAnalyt
     // --- PPC per week ---
     const ppcPoints: PPCDataPoint[] = lookAheads.map((la) => {
       const relevantLines = allLines.filter((l) => l.lookahead_id === la.id);
-
-      let completed = 0;
-      let totalPlanned = 0;
-
-      for (const line of relevantLines) {
-        const spd = (line.status_per_day || {}) as Record<string, string>;
-        for (const status of Object.values(spd)) {
-          if (["Y", "N", "50", "progress"].includes(status)) {
-            totalPlanned++;
-            if (status === "Y") completed++;
-          }
-        }
-      }
-
-      const ppc = totalPlanned > 0 ? Math.round((completed / totalPlanned) * 100) : 0;
+      const { completed, resolved: totalPlanned, ppc } = computePPC(relevantLines);
       return {
         weekLabel: format(new Date(la.week_start_date + "T00:00:00"), "MMM d"),
         weekDate: la.week_start_date,
