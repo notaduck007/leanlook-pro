@@ -308,8 +308,14 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           };
 
           if (hasChildren && line.children) {
-            const workStatuses = line.children
-              .map((c) => (c.status_per_day[date] as DayStatus) || "")
+            // Roll up across ALL descendants, not just direct children,
+            // so 3+ level hierarchies show the correct parent color.
+            const collectDescendants = (node: LookaheadLineData): LookaheadLineData[] => {
+              const kids = node.children || [];
+              return kids.flatMap((k) => [k, ...collectDescendants(k)]);
+            };
+            const workStatuses = collectDescendants(line)
+              .map((c) => (c.status_per_day?.[date] as DayStatus) || "")
               .filter((s) => isWorkStatus(s));
             if (workStatuses.length > 0) {
               const allY = workStatuses.every((s) => s === "Y");
