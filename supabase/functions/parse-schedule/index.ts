@@ -7,6 +7,18 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Chunked base64 encoder — avoids "Maximum call stack size exceeded"
+// from spreading large Uint8Arrays into String.fromCharCode.
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const sub = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(sub) as number[]);
+  }
+  return btoa(binary);
+}
+
 const TAG_RULES: Record<string, string[]> = {
   "MEP": ["mep", "mechanical", "electrical", "plumbing", "hvac", "ahu", "chiller", "boiler", "ductwork", "piping", "conduit", "panel", "transformer", "vav", "diffuser"],
   "Structural": ["structural", "steel", "concrete", "foundation", "pier", "drilled pier", "grade beam", "slab", "footing", "rebar", "formwork", "shoring", "framing", "decking"],
@@ -244,11 +256,11 @@ serve(async (req) => {
       fileContent = `[Microsoft Project (.mpp) file - extracted task names and metadata]:\n\n${unique.join("\n")}`;
     } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       const buffer = await fileData.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 50000)));
+      const base64 = bytesToBase64(new Uint8Array(buffer).slice(0, 50000));
       fileContent = `[Excel file base64 preview - first 50KB]: ${base64}`;
     } else {
       const buffer = await fileData.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 100000)));
+      const base64 = bytesToBase64(new Uint8Array(buffer).slice(0, 100000));
       fileContent = `[PDF file base64 - first 100KB]: ${base64}`;
     }
 
