@@ -15,22 +15,51 @@ export default function ResetPassword() {
   const [ready, setReady] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.includes("type=recovery")) {
+    let cancelled = false;
+    const hash = window.location.hash || "";
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+
+    // 1) Implicit hash flow (#access_token=...&type=recovery)
+    if (hash.includes("type=recovery")) {
       setReady(true);
-    } else {
-      // Listen for PASSWORD_RECOVERY event
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "PASSWORD_RECOVERY") {
+      return;
+    }
+
+    // 2) PKCE flow (?code=...) — exchange for a session
+    if (code) {
+      (async () => {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (cancelled) return;
+        if (error) {
+          setVerifyError("This reset link is invalid or has expired. Request a new one from the sign-in page.");
+        } else {
           setReady(true);
         }
-      });
-      return () => subscription.unsubscribe();
+      })();
     }
+
+    // 3) Fallback: PASSWORD_RECOVERY event (older client behavior)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setReady(true);
+    });
+
+    // 4) Timeout safety net so we never sit on "Verifying..." forever
+    const timeout = setTimeout(() => {
+      if (cancelled) return;
+      setVerifyError((prev) => prev ?? "We couldn't verify your reset link. Request a new one from the sign-in page.");
+    }, 8000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
@@ -64,11 +93,17 @@ export default function ResetPassword() {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold">LeanLook</CardTitle>
-              <CardDescription>Verifying your reset link...</CardDescription>
+              <CardDescription>
+                {verifyError ?? "Verifying your reset link..."}
+              </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="flex justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <CardContent className="flex flex-col items-center gap-3">
+            {verifyError ? (
+              <Button variant="outline" onClick={() => navigate("/auth")}>Back to sign in</Button>
+            ) : (
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            )}
           </CardContent>
         </Card>
       </div>

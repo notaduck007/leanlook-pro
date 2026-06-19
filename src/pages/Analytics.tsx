@@ -58,6 +58,7 @@ export default function Analytics() {
   const [lookaheads, setLookaheads] = useState<LookaheadRow[]>([]);
   const [lines, setLines] = useState<LineRow[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [ppcGoals, setPpcGoals] = useState<number[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
 
@@ -66,13 +67,15 @@ export default function Analytics() {
 
     const fetchAll = async () => {
       const [projRes, laRes, profileRes] = await Promise.all([
-        supabase.from("projects").select("id, name").eq("company_id", profile.company_id!),
+        supabase.from("projects").select("id, name, ppc_goal").eq("company_id", profile.company_id!),
         supabase.from("look_aheads").select("id, project_id, super_id, status, week_start_date").eq("company_id", profile.company_id!),
         supabase.from("profiles").select("user_id, display_name").eq("company_id", profile.company_id!),
       ]);
 
       const allLAs = (laRes.data || []) as LookaheadRow[];
-      setProjects(projRes.data || []);
+      const projRows = (projRes.data || []) as any[];
+      setProjects(projRows.map((p) => ({ id: p.id, name: p.name })));
+      setPpcGoals(projRows.map((p) => Number(p.ppc_goal)).filter((n) => Number.isFinite(n) && n > 0));
       setLookaheads(allLAs);
       setProfiles(profileRes.data || []);
 
@@ -165,6 +168,13 @@ export default function Analytics() {
       return { name: profileMap.get(sid) || "Unknown", userId: sid, ppc, completed, planned };
     }).filter((s) => s.planned > 0);
   }, [lookaheads, lines, profileMap]);
+
+  // Company-wide PPC goal for the trend chart target line. Average the
+  // per-project ppc_goal values; fall back to 80 if none are configured.
+  const targetGoal = useMemo(() => {
+    if (ppcGoals.length === 0) return 80;
+    return Math.round(ppcGoals.reduce((a, b) => a + b, 0) / ppcGoals.length);
+  }, [ppcGoals]);
 
   // Variance analysis: trades with highest failure rates
   const tradeVariance = useMemo(() => {
@@ -342,8 +352,8 @@ export default function Analytics() {
                     formatter={(value: number, name: string) => [`${value}%`, "PPC"]}
                     labelFormatter={(label) => `Week of ${label}`}
                   />
-                  {/* Target line at 80% */}
-                  <Line type="monotone" dataKey={() => 80} stroke="#94a3b8" strokeDasharray="6 3" dot={false} name="Target (80%)" />
+                  {/* Target line driven by configured ppc_goal (average across projects) */}
+                  <Line type="monotone" dataKey={() => targetGoal} stroke="#94a3b8" strokeDasharray="6 3" dot={false} name={`Target (${targetGoal}%)`} />
                   <Line type="monotone" dataKey="ppc" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} name="PPC" />
                   <Legend />
                 </LineChart>
