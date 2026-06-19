@@ -63,6 +63,7 @@ export default function LookAheadEditor() {
   const isDirty = useRef(false);
   const linesRef = useRef<LookaheadLineData[]>([]);
   const isSavingRef = useRef(false);
+  const isReadOnlyRef = useRef(false);
 
   // Cell refs for keyboard navigation
   const cellRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -187,6 +188,10 @@ export default function LookAheadEditor() {
 
   const saveDraft = useCallback(async () => {
     if (isSavingRef.current) return;
+    // Skip autosave if the look-ahead is read-only (submitted/approved
+    // and the current user isn't a reviewer). UI marks fields read-only,
+    // but autosave runs from a setInterval and must also respect this.
+    if (isReadOnlyRef.current) return;
     const currentLines = linesRef.current;
     if (currentLines.length === 0) return;
 
@@ -331,46 +336,10 @@ export default function LookAheadEditor() {
       prev.map((l) => l.id === lineId ? { ...l, task_name: newName, custom_text: newName } : l)
     );
 
+    // Inline rename ONLY changes the local lookahead line label.
+    // Do NOT propagate to the shared `tasks` table (would rewrite Gantt and
+    // every other look-ahead) or to the company master library.
     await supabase.from("lookahead_lines").update({ custom_text: newName }).eq("id", lineId);
-
-    if (line.task_id) {
-      await supabase.from("tasks").update({ name: newName }).eq("id", line.task_id);
-    }
-
-    // Sync to master repository
-    if (line.parent_line_id) {
-      // This is a subtask — find parent to get master_task context
-      const parentLine = lines.find((l) => l.id === line.parent_line_id);
-      if (parentLine) {
-        const parentName = parentLine.task_name || parentLine.custom_text || "";
-        const normalized = parentName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-        const { data: masterTask } = await supabase
-          .from("master_tasks")
-          .select("id")
-          .eq("normalized_name", normalized)
-          .maybeSingle();
-
-        if (masterTask) {
-          // Find and update the matching subtask by old name or position
-          const oldName = (line.task_name || line.custom_text || "").replace(/^↳\s*/, "");
-          const cleanNewName = newName.replace(/^↳\s*/, "");
-          await supabase
-            .from("master_subtasks")
-            .update({ name: cleanNewName })
-            .eq("master_task_id", masterTask.id)
-            .eq("name", oldName);
-        }
-      }
-    } else {
-      // This is a main task — sync name to master_tasks
-      const oldName = (line.task_name || line.custom_text || "");
-      const oldNormalized = oldName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-      const newNormalized = newName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-      await supabase
-        .from("master_tasks")
-        .update({ name: newName, normalized_name: newNormalized })
-        .eq("normalized_name", oldNormalized);
-    }
 
     markDirty();
   };
@@ -1025,6 +994,7 @@ export default function LookAheadEditor() {
 
   const isOwner = lookAhead?.super_id === user?.id;
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  isReadOnlyRef.current = isReadOnly;
 
   // Today's date string for column highlighting
   const todayStr = format(new Date(), "yyyy-MM-dd");

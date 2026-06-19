@@ -83,11 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchProfile(session.user.id);
-        fetchRoles(session.user.id);
+        // Await profile + roles BEFORE flipping loading=false so that
+        // ProtectedRoute does not see (session && !profile) on hard refresh
+        // and wrongly redirect onboarded users to /onboarding.
+        await fetchProfile(session.user.id);
+        await fetchRoles(session.user.id);
       }
       setLoading(false);
     });

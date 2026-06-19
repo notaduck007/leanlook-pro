@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
+import { computePPC } from "@/lib/ppc";
 
 export interface PreviousLineData {
   task_id: string | null;
@@ -78,18 +79,9 @@ export async function fetchComparisonData(
     assigned_trade: l.assigned_trade,
   }));
 
-  // Calculate previous PPC
-  let prevCompleted = 0;
-  let prevPlanned = 0;
-  previousLines.forEach((l) => {
-    Object.values(l.status_per_day).forEach((s) => {
-      if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
-        prevPlanned++;
-        if (s === "Y") prevCompleted++;
-      }
-    });
-  });
-  const previousPPC = prevPlanned > 0 ? Math.round((prevCompleted / prevPlanned) * 100) : null;
+  // Calculate previous PPC using the shared canonical helper
+  const { resolved: prevResolved, ppc: prevPpc } = computePPC(previousLines);
+  const previousPPC = prevResolved > 0 ? prevPpc : null;
 
   // Build maps
   const prevLineMap = new Map<string, PreviousLineData>();
