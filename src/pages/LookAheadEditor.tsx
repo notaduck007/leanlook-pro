@@ -994,6 +994,7 @@ export default function LookAheadEditor() {
 
   const isOwner = lookAhead?.super_id === user?.id;
   const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  isReadOnlyRef.current = isReadOnly;
 
   // Today's date string for column highlighting
   const todayStr = format(new Date(), "yyyy-MM-dd");
