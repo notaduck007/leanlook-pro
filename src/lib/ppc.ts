@@ -9,7 +9,7 @@
  */
 
 export type LineLike = {
-  status_per_day?: Record<string, string> | null;
+  status_per_day?: Record<string, string> | null | any;
 };
 
 const RESOLVED_STATUSES = new Set(["Y", "N", "50", "progress"]);
