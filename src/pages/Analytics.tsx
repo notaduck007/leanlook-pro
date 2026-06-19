@@ -7,6 +7,7 @@ import { Loader2, TrendingUp, CheckCircle, Clock, BarChart3, Target, AlertTriang
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
 import { DayStatus } from "@/components/lookahead/StatusCell";
+import { computePPC as sharedComputePPC } from "@/lib/ppc";
 
 type LookaheadRow = {
   id: string;

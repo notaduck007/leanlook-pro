@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, BarChart3, Save, TrendingUp, ClipboardList, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { computePPC } from "@/lib/ppc";
 import {
   LineChart,
   Line,
