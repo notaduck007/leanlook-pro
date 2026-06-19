@@ -7,6 +7,18 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Chunked base64 encoder — avoids "Maximum call stack size exceeded"
+// from spreading large Uint8Arrays into String.fromCharCode.
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const sub = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(sub) as number[]);
+  }
+  return btoa(binary);
+}
+
 const TAG_RULES: Record<string, string[]> = {
   "MEP": ["mep", "mechanical", "electrical", "plumbing", "hvac", "ahu", "chiller", "boiler", "ductwork", "piping", "conduit", "panel", "transformer", "vav", "diffuser"],
   "Structural": ["structural", "steel", "concrete", "foundation", "pier", "drilled pier", "grade beam", "slab", "footing", "rebar", "formwork", "shoring", "framing", "decking"],
