@@ -346,6 +346,9 @@ export default function NewLookAhead() {
           const taskEnd = task.finish_date ? parseISO(task.finish_date) : taskStart;
           dates.forEach((date) => {
             const d = parseISO(date);
+            // Skip weekends — only seed Mon–Fri working days as "planned"
+            const dow = d.getDay();
+            if (dow === 0 || dow === 6) return;
             const afterStart = taskStart ? !isBefore(d, taskStart) : true;
             const beforeEnd = taskEnd ? !isAfter(d, taskEnd) : true;
             if (afterStart && beforeEnd) {
