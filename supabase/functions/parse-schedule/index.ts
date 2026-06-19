@@ -244,11 +244,11 @@ serve(async (req) => {
       fileContent = `[Microsoft Project (.mpp) file - extracted task names and metadata]:\n\n${unique.join("\n")}`;
     } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       const buffer = await fileData.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 50000)));
+      const base64 = bytesToBase64(new Uint8Array(buffer).slice(0, 50000));
       fileContent = `[Excel file base64 preview - first 50KB]: ${base64}`;
     } else {
       const buffer = await fileData.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer).slice(0, 100000)));
+      const base64 = bytesToBase64(new Uint8Array(buffer).slice(0, 100000));
       fileContent = `[PDF file base64 - first 100KB]: ${base64}`;
     }
 
