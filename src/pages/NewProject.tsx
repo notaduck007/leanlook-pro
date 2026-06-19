@@ -47,12 +47,16 @@ export default function NewProject() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreate} className="space-y-4">
-            <Input
-              placeholder="Project name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+            <div className="space-y-1">
+              <Label htmlFor="projectName">Project name</Label>
+              <Input
+                id="projectName"
+                placeholder="Project name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating..." : "Create Project"}
             </Button>

@@ -134,24 +134,32 @@ export default function Onboarding() {
         <CardContent>
           {mode === "create" ? (
             <form onSubmit={handleCreate} className="space-y-4">
-              <Input
-                placeholder="Company name"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                required
-              />
+              <div className="space-y-1">
+                <Label htmlFor="companyName">Company name</Label>
+                <Input
+                  id="companyName"
+                  placeholder="Company name"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  required
+                />
+              </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Creating..." : "Create Company"}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleJoin} className="space-y-4">
-              <Input
-                placeholder="Company code (e.g. acme-construction)"
-                value={companyCode}
-                onChange={(e) => setCompanyCode(e.target.value)}
-                required
-              />
+              <div className="space-y-1">
+                <Label htmlFor="companyCode">Company code</Label>
+                <Input
+                  id="companyCode"
+                  placeholder="Company code (e.g. acme-construction)"
+                  value={companyCode}
+                  onChange={(e) => setCompanyCode(e.target.value)}
+                  required
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
                 Ask your company admin for the company code. It's the unique identifier for your organization.
               </p>
