@@ -164,8 +164,15 @@ async function populateMasterRepository(
       const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
       if (!toolCall) continue;
 
-      const parsed = JSON.parse(toolCall.function.arguments);
-      const aiTasks = parsed.tasks || [];
+      let aiTasks: any[] = [];
+      try {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        if (Array.isArray(parsed?.tasks)) aiTasks = parsed.tasks;
+      } catch (err) {
+        console.error("Subtask AI returned invalid JSON, skipping batch:", err);
+        continue;
+      }
+      if (aiTasks.length === 0) continue;
 
       for (const aiTask of aiTasks) {
         const matchedOriginal = batch.find(
@@ -314,10 +321,14 @@ serve(async (req) => {
       isMpp = true;
       const buffer = await fileData.arrayBuffer();
       const bytes = new Uint8Array(buffer);
+      // Cap scanning to avoid OOM/timeout on large .mpp files.
+      const MAX_SCAN_BYTES = 8 * 1024 * 1024; // 8MB of bytes
+      const MAX_CANDIDATES = 20000;
+      const scanLen = Math.min(bytes.length - 1, MAX_SCAN_BYTES);
       const strings: string[] = [];
-      for (let i = 0; i < bytes.length - 1; i++) {
+      for (let i = 0; i < scanLen && strings.length < MAX_CANDIDATES; i++) {
         const chars: string[] = [];
-        while (i < bytes.length - 1) {
+        while (i < scanLen) {
           const lo = bytes[i], hi = bytes[i + 1];
           if (hi === 0 && lo >= 32 && lo < 127) {
             chars.push(String.fromCharCode(lo));
@@ -334,6 +345,15 @@ serve(async (req) => {
         !s.startsWith("Windows") &&
         !s.includes("\\")
       );
+      if (unique.length < 5) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "We couldn't reliably extract tasks from this .mpp file. Please open it in Microsoft Project and export to XLSX or CSV, then re-upload.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       fileContent = `[Microsoft Project (.mpp) file - extracted task names and metadata]:\n\n${unique.join("\n")}`;
     } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       const buffer = await fileData.arrayBuffer();
@@ -462,8 +482,37 @@ Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.
     const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) throw new Error("No tasks extracted from AI");
 
-    const parsed = JSON.parse(toolCall.function.arguments);
-    const extractedTasks = parsed.tasks || [];
+    let extractedTasks: any[] = [];
+    try {
+      const parsed = JSON.parse(toolCall.function.arguments);
+      if (parsed && Array.isArray(parsed.tasks)) extractedTasks = parsed.tasks;
+    } catch (err) {
+      console.error("AI returned invalid JSON for task extraction:", err);
+      return new Response(
+        JSON.stringify({
+          error:
+            "The AI returned a malformed response while parsing the schedule. Please try again, or upload a smaller / cleaner CSV or XLSX.",
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (!Array.isArray(extractedTasks) || extractedTasks.length === 0) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "No tasks were extracted from this schedule. Please check the file contents and try a CSV or XLSX export if possible.",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // Drop entries without a usable name
+    extractedTasks = extractedTasks.filter((t: any) => t && typeof t.name === "string" && t.name.trim().length > 0);
+    if (extractedTasks.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "AI response contained no valid task names." }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Enhance AI tags with rule-based auto-tagging
     const taskInserts = extractedTasks.map((t: any) => {
