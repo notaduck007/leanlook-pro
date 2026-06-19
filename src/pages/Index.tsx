@@ -22,9 +22,10 @@ export default function Dashboard() {
         supabase.from("schedule_versions").select("id").eq("company_id", profile.company_id!),
       ]);
 
-      setProjects(projectsRes.data || []);
+      const allProjects = projectsRes.data || [];
+      setProjects(allProjects);
       setStats({
-        projects: projectsRes.data?.length || 0,
+        projects: allProjects.filter((p) => p.status === "active").length,
         lookAheads: lookAheadsRes.data?.length || 0,
         schedules: schedulesRes.data?.length || 0,
       });
