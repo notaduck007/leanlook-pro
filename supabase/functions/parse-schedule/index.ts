@@ -70,13 +70,15 @@ function normalizeTaskName(name: string): string {
 async function populateMasterRepository(
   supabase: any,
   tasks: Array<{ name: string; tags: string[] }>,
-  apiKey: string
+  apiKey: string,
+  companyId: string
 ) {
   // Get existing master tasks to avoid duplicates
   const normalizedNames = tasks.map(t => normalizeTaskName(t.name));
   const { data: existing } = await supabase
     .from("master_tasks")
     .select("normalized_name")
+    .eq("company_id", companyId)
     .in("normalized_name", normalizedNames);
 
   const existingSet = new Set((existing || []).map((e: any) => e.normalized_name));
@@ -184,6 +186,7 @@ async function populateMasterRepository(
             normalized_name: normalized,
             tags: originalTags,
             category: aiTask.category || originalTags[0] || null,
+            company_id: companyId,
           })
           .select("id")
           .single();
@@ -202,6 +205,7 @@ async function populateMasterRepository(
           name: st.name,
           sort_order: idx,
           category: st.category || "execute",
+          company_id: companyId,
         }));
 
         if (subtaskInserts.length > 0) {
@@ -218,14 +222,79 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { schedule_version_id, file_url, company_id } = await req.json();
+    const { schedule_version_id, file_url } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    // --- AuthN: verify the caller's JWT ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId = userData.user.id;
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // --- AuthZ: derive company_id from caller's profile ---
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (profileErr || !profile?.company_id) {
+      return new Response(JSON.stringify({ error: "No company associated with user" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const company_id: string = profile.company_id;
+
+    // Validate input shapes
+    if (typeof schedule_version_id !== "string" || typeof file_url !== "string") {
+      return new Response(JSON.stringify({ error: "Invalid request body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate schedule_version belongs to caller's company
+    const { data: sv, error: svErr } = await supabase
+      .from("schedule_versions")
+      .select("id, company_id")
+      .eq("id", schedule_version_id)
+      .maybeSingle();
+    if (svErr || !sv || sv.company_id !== company_id) {
+      return new Response(JSON.stringify({ error: "Forbidden: schedule version not in your company" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate file_url path is under caller's company folder
+    const firstSeg = file_url.split("/")[0];
+    if (firstSeg !== company_id) {
+      return new Response(JSON.stringify({ error: "Forbidden: file path outside your company folder" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Download the file
     const { data: fileData, error: downloadError } = await supabase.storage
@@ -432,7 +501,7 @@ Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.
     const masterTasks = taskInserts.map((t: any) => ({ name: t.name, tags: t.tags }));
     // Keep function alive until master repository population completes
     EdgeRuntime.waitUntil(
-      populateMasterRepository(supabase, masterTasks, LOVABLE_API_KEY).catch(err =>
+      populateMasterRepository(supabase, masterTasks, LOVABLE_API_KEY, company_id).catch(err =>
         console.error("Master repository population error:", err)
       )
     );

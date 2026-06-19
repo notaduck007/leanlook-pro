@@ -17,6 +17,7 @@ import { SubContractorAutocomplete } from "@/components/subcontractors/SubContra
 import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/MasterAutocomplete";
 import { MasterTaskRecord } from "@/hooks/useMasterTasks";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface CarryOverDataInfo {
   previous_lookahead_id?: string;
@@ -100,6 +101,8 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const { profile } = useAuth();
+
   const taskAutocompleteItems: AutocompleteItem[] = useMemo(() =>
     masterTasks.map(t => ({
       id: t.id,
@@ -120,10 +123,11 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
   };
 
   const handleAddNewTask = async (name: string): Promise<AutocompleteItem | null> => {
+    if (!profile?.company_id) return null;
     const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
     const { data, error } = await supabase
       .from("master_tasks")
-      .insert({ name, normalized_name: normalized, status: "active" })
+      .insert({ name, normalized_name: normalized, status: "active", company_id: profile.company_id })
       .select("id, name, category")
       .single();
     if (error || !data) return null;

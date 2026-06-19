@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Search, Plus, Trash2, Edit, Download, ArrowUpDown, Loader2, Database } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MasterTask {
   id: string;
@@ -50,6 +51,7 @@ const statusColors: Record<string, string> = {
 type SortKey = "name" | "category" | "default_duration" | "status" | "created_at";
 
 export default function MasterTasks() {
+  const { profile } = useAuth();
   const [tasks, setTasks] = useState<MasterTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -146,6 +148,8 @@ export default function MasterTasks() {
     if (editingTask) {
       ({ error } = await supabase.from("master_tasks").update(payload).eq("id", editingTask.id));
     } else {
+      if (!profile?.company_id) { toast({ title: "No company associated with user", variant: "destructive" }); setSaving(false); return; }
+      payload.company_id = profile.company_id;
       ({ error } = await supabase.from("master_tasks").insert(payload));
     }
     setSaving(false);
