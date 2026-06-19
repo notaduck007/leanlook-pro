@@ -54,6 +54,12 @@ Deno.serve(async (req) => {
       _user_id: user.id,
     });
 
+    // Check if caller is super-admin (cross-company privileges)
+    const { data: isSuper } = await adminClient.rpc("has_role", {
+      _user_id: user.id,
+      _role: "super",
+    });
+
     const { email, role, display_name, password, company_id } = await req.json();
     if (!email) {
       return new Response(JSON.stringify({ error: "Email is required" }), {
@@ -62,8 +68,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Authorize cross-company assignment: only super-admins, or company_id matching caller's own
+    if (company_id && !isSuper && company_id !== callerCompanyId) {
+      return new Response(
+        JSON.stringify({ error: "Not authorized to manage users in another company" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Use provided company_id or fall back to caller's company
     const targetCompanyId = company_id || callerCompanyId;
+
+    if (!targetCompanyId) {
+      return new Response(JSON.stringify({ error: "No target company" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // If a company_id is provided, verify it exists
     if (company_id) {
