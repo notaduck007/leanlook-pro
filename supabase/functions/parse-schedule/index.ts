@@ -391,9 +391,11 @@ Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.
 
     // Populate master task repository in background (don't block response)
     const masterTasks = taskInserts.map((t: any) => ({ name: t.name, tags: t.tags }));
-    // Fire and forget — populate master repository asynchronously
-    populateMasterRepository(supabase, masterTasks, LOVABLE_API_KEY).catch(err =>
-      console.error("Master repository population error:", err)
+    // Keep function alive until master repository population completes
+    EdgeRuntime.waitUntil(
+      populateMasterRepository(supabase, masterTasks, LOVABLE_API_KEY).catch(err =>
+        console.error("Master repository population error:", err)
+      )
     );
 
     return new Response(
