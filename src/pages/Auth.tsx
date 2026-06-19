@@ -32,7 +32,7 @@ export default function Auth() {
         setForgotPassword(false);
       }
     } else if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -42,6 +42,9 @@ export default function Auth() {
       });
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
+      } else if (!data.session) {
+        toast({ title: "Check your email", description: "Confirm your account before signing in." });
+        setIsSignUp(false);
       } else {
         toast({ title: "Account created!", description: "You can now sign in." });
         setIsSignUp(false);
