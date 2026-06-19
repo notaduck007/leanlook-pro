@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import { extractText } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,16 +9,26 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Chunked base64 encoder — avoids "Maximum call stack size exceeded"
-// from spreading large Uint8Arrays into String.fromCharCode.
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const CHUNK = 8192;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    const sub = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
-    binary += String.fromCharCode.apply(null, Array.from(sub) as number[]);
+// Extract plain text from .xlsx/.xls by reading every sheet as CSV.
+function extractXlsxText(bytes: Uint8Array): string {
+  const wb = XLSX.read(bytes, { type: "array" });
+  const parts: string[] = [];
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    if (csv.trim().length > 0) {
+      parts.push(`# Sheet: ${sheetName}\n${csv}`);
+    }
   }
-  return btoa(binary);
+  return parts.join("\n\n");
+}
+
+// Extract text layer from PDF bytes using unpdf.
+async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  const result: any = await extractText(bytes, { mergePages: true });
+  const text = Array.isArray(result?.text) ? result.text.join("\n") : (result?.text ?? "");
+  return typeof text === "string" ? text : "";
 }
 
 const TAG_RULES: Record<string, string[]> = {
@@ -256,12 +268,39 @@ serve(async (req) => {
       fileContent = `[Microsoft Project (.mpp) file - extracted task names and metadata]:\n\n${unique.join("\n")}`;
     } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       const buffer = await fileData.arrayBuffer();
-      const base64 = bytesToBase64(new Uint8Array(buffer).slice(0, 50000));
-      fileContent = `[Excel file base64 preview - first 50KB]: ${base64}`;
+      try {
+        fileContent = extractXlsxText(new Uint8Array(buffer));
+      } catch (err) {
+        console.error("XLSX parse error:", err);
+        return new Response(
+          JSON.stringify({ error: "Could not read this Excel file. Please re-export it as .xlsx or .csv and try again." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (fileContent.replace(/\s+/g, "").length < 20) {
+        return new Response(
+          JSON.stringify({ error: "No readable rows were found in this Excel file. Please upload a CSV or a text-based schedule." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     } else {
+      // Treat as PDF — extract the text layer.
       const buffer = await fileData.arrayBuffer();
-      const base64 = bytesToBase64(new Uint8Array(buffer).slice(0, 100000));
-      fileContent = `[PDF file base64 - first 100KB]: ${base64}`;
+      try {
+        fileContent = await extractPdfText(new Uint8Array(buffer));
+      } catch (err) {
+        console.error("PDF parse error:", err);
+        return new Response(
+          JSON.stringify({ error: "Could not read this PDF. If it is a scanned/image-only PDF, please upload a CSV or text-based schedule instead." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (fileContent.replace(/\s+/g, "").length < 50) {
+        return new Response(
+          JSON.stringify({ error: "This PDF appears to be scanned or image-only with no readable text. Please upload a CSV or a text-based schedule instead." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Call Lovable AI to parse
