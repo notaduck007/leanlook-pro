@@ -101,6 +101,8 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const { profile } = useAuth();
+
   const taskAutocompleteItems: AutocompleteItem[] = useMemo(() =>
     masterTasks.map(t => ({
       id: t.id,

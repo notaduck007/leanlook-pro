@@ -591,6 +591,7 @@ export default function LookAheadEditor() {
           master_task_id: masterTask.id,
           name: "New Subtask",
           sort_order: (count || 0) + 1,
+          company_id: profile?.company_id,
         });
       }
 
