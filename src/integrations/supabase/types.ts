@@ -184,6 +184,7 @@ export type Database = {
       master_subtasks: {
         Row: {
           category: string | null
+          company_id: string | null
           created_at: string
           id: string
           master_task_id: string
@@ -192,6 +193,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          company_id?: string | null
           created_at?: string
           id?: string
           master_task_id: string
@@ -200,6 +202,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          company_id?: string | null
           created_at?: string
           id?: string
           master_task_id?: string
@@ -207,6 +210,13 @@ export type Database = {
           sort_order?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "master_subtasks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "master_subtasks_master_task_id_fkey"
             columns: ["master_task_id"]
@@ -219,6 +229,7 @@ export type Database = {
       master_tasks: {
         Row: {
           category: string | null
+          company_id: string | null
           created_at: string
           default_duration: number | null
           default_trade: string | null
@@ -232,6 +243,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          company_id?: string | null
           created_at?: string
           default_duration?: number | null
           default_trade?: string | null
@@ -245,6 +257,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          company_id?: string | null
           created_at?: string
           default_duration?: number | null
           default_trade?: string | null
@@ -256,7 +269,15 @@ export type Database = {
           tags?: string[] | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "master_tasks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
