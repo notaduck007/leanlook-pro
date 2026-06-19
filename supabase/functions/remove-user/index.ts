@@ -62,6 +62,37 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Company-scoped authorization: admins may only remove users in their own company.
+    // Super-admins may remove across companies.
+    const { data: isSuper } = await adminClient.rpc("has_role", {
+      _user_id: user.id,
+      _role: "super",
+    });
+
+    const { data: callerCompanyId } = await adminClient.rpc("get_user_company_id", {
+      _user_id: user.id,
+    });
+
+    const { data: targetProfile } = await adminClient
+      .from("profiles")
+      .select("company_id")
+      .eq("user_id", target_user_id)
+      .single();
+
+    if (!targetProfile) {
+      return new Response(JSON.stringify({ error: "Target user not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!isSuper && targetProfile.company_id !== callerCompanyId) {
+      return new Response(
+        JSON.stringify({ error: "Not authorized to remove users in another company" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Remove all roles
     await adminClient.from("user_roles").delete().eq("user_id", target_user_id);
 
