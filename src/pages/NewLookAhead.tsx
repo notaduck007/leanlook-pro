@@ -110,7 +110,10 @@ export default function NewLookAhead() {
   // Count tasks overlapping the 2-week window
   useEffect(() => {
     if (!projectId || !weekStart) return;
-    const end = format(addWeeks(new Date(weekStart), 2), "yyyy-MM-dd");
+    // Use the SAME window math as handleCreate: parseISO + addDays(_, 13).
+    // Avoids TZ/month-boundary off-by-one vs new Date(weekStart) + addWeeks(_, 2).
+    const wsDate = parseISO(weekStart);
+    const end = format(addDays(wsDate, 13), "yyyy-MM-dd");
     supabase
       .from("schedule_versions")
       .select("id")
@@ -283,6 +286,9 @@ export default function NewLookAhead() {
   }, [previousLookahead, weekStart]);
 
   const handleCreate = async () => {
+    // Re-entrancy guard: prevent the carry-over useEffect double-trigger
+    // (or a double click) from creating duplicate look-aheads.
+    if (creating) return;
     if (!projectId || !user || !profile?.company_id) return;
 
     if (carryOverTasks.length > 0 && !pendingCreate) {
@@ -291,6 +297,9 @@ export default function NewLookAhead() {
     }
 
     setCreating(true);
+    // Snapshot the carry-over selection NOW so async state updates can't
+    // change what we insert mid-flight.
+    const selectedCarryOver = carryOverTasks.filter((t) => t.selected);
 
     const { data: la, error } = await supabase
       .from("look_aheads")
@@ -388,7 +397,6 @@ export default function NewLookAhead() {
     }
 
     // Insert carry-over tasks (with subtasks and carry_over_data)
-    const selectedCarryOver = carryOverTasks.filter((t) => t.selected);
     if (selectedCarryOver.length > 0) {
       const existingTaskIdMap = new Map<string, string>();
       const { data: existingLines } = await supabase
@@ -562,8 +570,12 @@ export default function NewLookAhead() {
 
   useEffect(() => {
     if (pendingCreate) {
+      // Clear the flag immediately so handleCreate can't be re-triggered
+      // by a stale render before `creating` flips true.
+      setPendingCreate(false);
       handleCreate();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCreate]);
 
   const toggleCarryOverTask = (id: string) => {

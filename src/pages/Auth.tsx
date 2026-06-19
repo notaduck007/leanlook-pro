@@ -43,8 +43,21 @@ export default function Auth() {
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else if (!data.session) {
-        toast({ title: "Check your email", description: "Confirm your account before signing in." });
-        setIsSignUp(false);
+        // Supabase returns an obfuscated user with EMPTY `identities` when
+        // the email is already registered, to avoid leaking account existence.
+        // No confirmation email is sent in that case, so don't tell the user
+        // to check their inbox.
+        const identities = (data.user as any)?.identities;
+        if (Array.isArray(identities) && identities.length === 0) {
+          toast({
+            title: "Email already registered",
+            description: "This email is already registered — try signing in or resetting your password.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Check your email", description: "Confirm your account before signing in." });
+          setIsSignUp(false);
+        }
       } else {
         toast({ title: "Account created!", description: "You can now sign in." });
         setIsSignUp(false);
