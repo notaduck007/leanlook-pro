@@ -63,6 +63,7 @@ export default function LookAheadEditor() {
   const isDirty = useRef(false);
   const linesRef = useRef<LookaheadLineData[]>([]);
   const isSavingRef = useRef(false);
+  const isReadOnlyRef = useRef(false);
 
   // Cell refs for keyboard navigation
   const cellRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -187,6 +188,10 @@ export default function LookAheadEditor() {
 
   const saveDraft = useCallback(async () => {
     if (isSavingRef.current) return;
+    // Skip autosave if the look-ahead is read-only (submitted/approved
+    // and the current user isn't a reviewer). UI marks fields read-only,
+    // but autosave runs from a setInterval and must also respect this.
+    if (isReadOnlyRef.current) return;
     const currentLines = linesRef.current;
     if (currentLines.length === 0) return;
 
