@@ -54,13 +54,7 @@ export function SubContractorAutocomplete({
       if (data) setAllSubs(data as Subcontractor[]);
     };
     load();
-
-    const channel = supabase
-      .channel(`subs-ac-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "subcontractors" }, () => load())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    // Realtime subscription removed for PII protection; list reloads on mount/company change.
   }, [profile?.company_id]);
 
   useEffect(() => { setInputValue(value || ""); }, [value]);

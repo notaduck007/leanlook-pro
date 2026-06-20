@@ -96,15 +96,8 @@ export default function SubContractors() {
 
   useEffect(() => { fetchSubs(); }, [fetchSubs]);
 
-  // Realtime
-  useEffect(() => {
-    if (!companyId) return;
-    const channel = supabase
-      .channel("subs-page")
-      .on("postgres_changes", { event: "*", schema: "public", table: "subcontractors" }, () => fetchSubs())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [companyId, fetchSubs]);
+  // Realtime removed: subcontractors PII no longer broadcast via realtime publication.
+  // Page relies on explicit refetch after save/delete actions.
 
   const filtered = useMemo(() => {
     let list = subs;

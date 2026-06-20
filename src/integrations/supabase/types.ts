@@ -677,8 +677,6 @@ export type Database = {
         Args: { _company_name: string; _slug: string }
         Returns: string
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "pm" | "super"
