@@ -18,6 +18,7 @@ import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { computePPC } from "@/lib/ppc";
+import { ProjectConstraint } from "@/lib/constraints";
 
 import { useMasterTasks } from "@/hooks/useMasterTasks";
 import {
@@ -57,6 +58,7 @@ export default function LookAheadEditor() {
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [variancePopoverKey, setVariancePopoverKey] = useState<string | null>(null);
   const [selectedMobileDate, setSelectedMobileDate] = useState<string | null>(null);
+  const [projectConstraints, setProjectConstraints] = useState<ProjectConstraint[]>([]);
 
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
@@ -182,6 +184,28 @@ export default function LookAheadEditor() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const fetchProjectConstraints = useCallback(async () => {
+    if (!projectId) return;
+    const { data } = await supabase
+      .from("project_constraints")
+      .select("*")
+      .eq("project_id", projectId)
+      .neq("status", "closed");
+    setProjectConstraints(((data as any) || []).filter((c: ProjectConstraint) => (c.description || "").trim().length > 0));
+  }, [projectId]);
+
+  useEffect(() => { fetchProjectConstraints(); }, [fetchProjectConstraints]);
+
+  const linkedConstraintsByLine = useMemo(() => {
+    const map: Record<string, ProjectConstraint[]> = {};
+    for (const c of projectConstraints) {
+      if (c.lookahead_line_id) {
+        (map[c.lookahead_line_id] ||= []).push(c);
+      }
+    }
+    return map;
+  }, [projectConstraints]);
 
   const markDirty = useCallback(() => {
     isDirty.current = true;
