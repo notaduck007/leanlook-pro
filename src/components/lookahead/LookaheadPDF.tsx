@@ -4,6 +4,7 @@ import { DayStatus } from "./StatusCell";
 import { format, parseISO } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { computePPC } from "@/lib/ppc";
 
 function statusSymbol(s: DayStatus): string {
   switch (s) {
@@ -107,149 +108,183 @@ export async function generateLookaheadPDF(
 ): Promise<void> {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Header
-  doc.setFontSize(16);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`${projectName} -- 2-Week Look-Ahead`, 40, 36);
+  // Compute PPC across all lines / all dates for the header summary.
+  const { ppc, completed, resolved } = computePPC(lines as any);
 
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text(
-    `Week of ${format(parseISO(weekStart), "MMMM d, yyyy")}  |  Superintendent: ${superName}  |  Generated ${format(new Date(), "MMM d, yyyy h:mm a")}`,
-    40, 50
-  );
+  // Split the date range into chunks (one chunk per page) so column widths stay legible.
+  // Default: one page per 7-day week (working week, then planning week).
+  const CHUNK_SIZE = 7;
+  const dateChunks: string[][] = [];
+  for (let i = 0; i < dates.length; i += CHUNK_SIZE) {
+    dateChunks.push(dates.slice(i, i + CHUNK_SIZE));
+  }
+  if (dateChunks.length === 0) dateChunks.push([]);
 
-  // Build hierarchical rows
-  const rows = buildHierarchicalRows(lines, dates);
+  // Render each chunk (week) on its own page so the table fits the page width without clipping.
+  dateChunks.forEach((chunkDates, chunkIdx) => {
+    if (chunkIdx > 0) doc.addPage();
 
-  // Build columns
-  const columns = [
-    { header: "Task", dataKey: "task" },
-    { header: "Trade", dataKey: "trade" },
-    ...dates.map((d) => {
-      const dt = parseISO(d);
-      return { header: `${format(dt, "EEE")}\n${format(dt, "M/d")}`, dataKey: d };
-    }),
-    { header: "Notes", dataKey: "notes" },
-    { header: "Materials", dataKey: "materials" },
-  ];
+    // Header
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    const chunkLabel = dateChunks.length > 1
+      ? ` -- Week ${chunkIdx + 1} of ${dateChunks.length}`
+      : "";
+    doc.text(`${projectName} -- 2-Week Look-Ahead${chunkLabel}`, 40, 36);
 
-  // Column widths
-  const taskColWidth = 140;
-  const tradeColWidth = 60;
-  const notesColWidth = 72;
-  const materialsColWidth = 64;
-  const fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
-  const availableForDates = pageWidth - 80 - fixedWidth;
-  const dateColWidth = Math.max(24, Math.floor(availableForDates / dates.length));
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `Week of ${format(parseISO(weekStart), "MMMM d, yyyy")}  |  Superintendent: ${superName}  |  Generated ${format(new Date(), "MMM d, yyyy h:mm a")}`,
+      40, 50
+    );
 
-  const columnStyles: Record<string, any> = {
-    task: { cellWidth: taskColWidth, fontSize: 7.5, halign: "left" },
-    trade: { cellWidth: tradeColWidth, fontSize: 7, halign: "left" },
-    notes: { cellWidth: notesColWidth, fontSize: 7, halign: "left" },
-    materials: { cellWidth: materialsColWidth, fontSize: 7, halign: "left" },
-  };
+    // PPC summary (same value on every page for context)
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(
+      `PPC: ${ppc}%  (${completed} of ${resolved} resolved)`,
+      40, 66
+    );
 
-  dates.forEach((d) => {
-    columnStyles[d] = { cellWidth: dateColWidth, fontSize: 8, halign: "center", fontStyle: "bold" };
-  });
+    // Build hierarchical rows for this chunk's dates.
+    const rows = buildHierarchicalRows(lines, chunkDates);
 
-  autoTable(doc, {
-    startY: 60,
-    columns,
-    body: rows,
-    styles: {
-      fontSize: 7.5,
-      cellPadding: 2.5,
-      lineColor: [200, 200, 200],
-      lineWidth: 0.5,
-      overflow: "ellipsize",
-    },
-    headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [51, 65, 85],
-      fontSize: 7,
-      fontStyle: "bold",
-      halign: "center",
-      valign: "middle",
-      cellPadding: 2,
-    },
-    columnStyles,
-    alternateRowStyles: { fillColor: [249, 250, 251] },
-    didParseCell: (data: any) => {
-      if (data.section !== "body") {
-        // Weekend shading for header
-        if (data.section === "head" && dates.includes(data.column.dataKey)) {
-          const dt = parseISO(data.column.dataKey);
-          const day = dt.getDay();
-          if (day === 0 || day === 6) {
-            data.cell.styles.fillColor = [226, 232, 240];
+    const columns = [
+      { header: "Task", dataKey: "task" },
+      { header: "Trade", dataKey: "trade" },
+      ...chunkDates.map((d) => {
+        const dt = parseISO(d);
+        return { header: `${format(dt, "EEE")}\n${format(dt, "M/d")}`, dataKey: d };
+      }),
+      { header: "Notes", dataKey: "notes" },
+      { header: "Materials", dataKey: "materials" },
+    ];
+
+    // Auto-fit: choose widths so fixed + dates exactly fill the page width.
+    const margins = 80;
+    const usable = pageWidth - margins;
+    const numDates = chunkDates.length || 1;
+    // Target proportions; tuned to keep day cells readable and Task wide enough.
+    let taskColWidth = 170;
+    let tradeColWidth = 70;
+    let notesColWidth = 110;
+    let materialsColWidth = 90;
+    let fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
+    let dateColWidth = Math.floor((usable - fixedWidth) / numDates);
+    const MIN_DATE = 34;
+    if (dateColWidth < MIN_DATE) {
+      // Shrink the text columns proportionally so each date cell stays at least MIN_DATE wide.
+      const need = MIN_DATE * numDates;
+      const newFixed = Math.max(usable - need, 220);
+      const ratio = newFixed / fixedWidth;
+      taskColWidth = Math.floor(taskColWidth * ratio);
+      tradeColWidth = Math.floor(tradeColWidth * ratio);
+      notesColWidth = Math.floor(notesColWidth * ratio);
+      materialsColWidth = Math.floor(materialsColWidth * ratio);
+      fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
+      dateColWidth = Math.floor((usable - fixedWidth) / numDates);
+    }
+
+    const columnStyles: Record<string, any> = {
+      task: { cellWidth: taskColWidth, fontSize: 7.5, halign: "left" },
+      trade: { cellWidth: tradeColWidth, fontSize: 7, halign: "left" },
+      notes: { cellWidth: notesColWidth, fontSize: 7, halign: "left" },
+      materials: { cellWidth: materialsColWidth, fontSize: 7, halign: "left" },
+    };
+    chunkDates.forEach((d) => {
+      columnStyles[d] = { cellWidth: dateColWidth, fontSize: 8, halign: "center", fontStyle: "bold" };
+    });
+
+    autoTable(doc, {
+      startY: 78,
+      columns,
+      body: rows,
+      tableWidth: "wrap",
+      styles: {
+        fontSize: 7.5,
+        cellPadding: 2.5,
+        lineColor: [200, 200, 200],
+        lineWidth: 0.5,
+        overflow: "linebreak",
+      },
+      headStyles: {
+        fillColor: [241, 245, 249],
+        textColor: [51, 65, 85],
+        fontSize: 7,
+        fontStyle: "bold",
+        halign: "center",
+        valign: "middle",
+        cellPadding: 2,
+      },
+      columnStyles,
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      didParseCell: (data: any) => {
+        if (data.section !== "body") {
+          if (data.section === "head" && chunkDates.includes(data.column.dataKey)) {
+            const dt = parseISO(data.column.dataKey);
+            const day = dt.getDay();
+            if (day === 0 || day === 6) {
+              data.cell.styles.fillColor = [226, 232, 240];
+            }
+          }
+          return;
+        }
+
+        const rowData = rows[data.row.index];
+        if (!rowData) return;
+
+        if (rowData.isParent && data.column.dataKey === "task") {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fontSize = 8;
+        }
+        if (rowData.isParent) {
+          data.cell.styles.fillColor = [230, 237, 246];
+        }
+        if (rowData.isSubtask) {
+          data.cell.styles.fillColor = [245, 247, 250];
+          if (data.column.dataKey === "task") {
+            data.cell.styles.textColor = [100, 116, 139];
+            data.cell.styles.fontSize = 7;
           }
         }
-        return;
-      }
 
-      const rowData = rows[data.row.index];
-      if (!rowData) return;
+        if (chunkDates.includes(data.column.dataKey)) {
+          const raw = data.cell.raw as string;
+          let status: DayStatus = "";
+          if (raw === "Y") status = "Y";
+          else if (raw === "X") status = "N";
+          else if (raw === "50") status = "50";
+          else if (raw === "P") status = "planned";
+          else if (raw === "IP") status = "progress";
 
-      // Parent task styling: bold, darker background
-      if (rowData.isParent && data.column.dataKey === "task") {
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 8;
-      }
+          const colors = statusColors(status);
+          if (colors) {
+            data.cell.styles.fillColor = colors.fill;
+            data.cell.styles.textColor = colors.text;
+          }
+        }
 
-      // Parent row background
-      if (rowData.isParent) {
-        data.cell.styles.fillColor = [230, 237, 246];
-      }
-
-      // Subtask styling: lighter text, indented (already has spaces in name)
-      if (rowData.isSubtask) {
-        data.cell.styles.fillColor = [245, 247, 250];
         if (data.column.dataKey === "task") {
-          data.cell.styles.textColor = [100, 116, 139];
-          data.cell.styles.fontSize = 7;
+          const raw = data.cell.raw as string;
+          if (raw.startsWith("[NEW] ")) {
+            data.cell.styles.textColor = [30, 64, 175];
+            data.cell.styles.fontStyle = "bold";
+          }
         }
-      }
+      },
+      margin: { left: 40, right: 40, top: 78, bottom: 40 },
+    });
 
-      // Color status cells
-      if (dates.includes(data.column.dataKey)) {
-        const raw = data.cell.raw as string;
-        let status: DayStatus = "";
-        if (raw === "Y") status = "Y";
-        else if (raw === "X") status = "N";
-        else if (raw === "50") status = "50";
-        else if (raw === "P") status = "planned";
-        else if (raw === "IP") status = "progress";
-
-        const colors = statusColors(status);
-        if (colors) {
-          data.cell.styles.fillColor = colors.fill;
-          data.cell.styles.textColor = colors.text;
-        }
-      }
-
-      // New task highlight
-      if (data.column.dataKey === "task") {
-        const raw = data.cell.raw as string;
-        if (raw.startsWith("[NEW] ")) {
-          data.cell.styles.textColor = [30, 64, 175];
-          data.cell.styles.fontStyle = "bold";
-        }
-      }
-    },
-    margin: { left: 40, right: 40 },
+    // Legend at bottom of this page
+    const finalY = (doc as any).lastAutoTable?.finalY || (pageHeight - 40);
+    const legendY = Math.min(finalY + 14, pageHeight - 28);
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Y = Complete    X = Not Done    50 = Partial    P = Planned    IP = In Progress", 40, legendY);
   });
-
-  // Legend at bottom
-  let finalY = (doc as any).lastAutoTable?.finalY || 500;
-  const legendY = finalY + 14;
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text("Y = Complete    X = Not Done    50 = Partial    P = Planned    IP = In Progress", 40, legendY);
-  finalY = legendY;
-
 
   // Page numbers
   const pageCount = doc.getNumberOfPages();
