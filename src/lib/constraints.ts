@@ -51,5 +51,6 @@ export type ProjectConstraint = {
   created_at: string;
   resolved_at: string | null;
   lookahead_line_id: string | null;
+  task_id: string | null;
   rank: number | null;
 };
