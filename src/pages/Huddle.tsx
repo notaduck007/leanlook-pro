@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { computePPC } from "@/lib/ppc";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 import { VARIANCE_REASONS, VarianceReasonPopover, getVarianceDotColor, VarianceReason } from "@/components/lookahead/VarianceReasonPopover";
-import { ProjectConstraint, needByUrgency, typeLabel } from "@/lib/constraints";
+import { ProjectConstraint, typeLabel } from "@/lib/constraints";
 import { useToast } from "@/hooks/use-toast";
 
 type HuddleLine = {
