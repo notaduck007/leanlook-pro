@@ -1103,7 +1103,18 @@ export default function LookAheadEditor() {
               </Button>
             </>
           )}
-          {isOwner && (lookAhead?.status === "draft" || isRejected) && (
+          {isReadOnly && (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground border">
+              <CheckCircle className="h-3 w-3" />
+              Read-only — {lookAhead?.status}
+            </span>
+          )}
+          {canReopen && (
+            <Button size="sm" variant="outline" onClick={handleReopen}>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reopen / Revise
+            </Button>
+          )}
+          {isOwner && lookAhead?.status === "draft" && (
             <>
               {/* Desktop: show all buttons */}
               <div className="hidden md:flex items-center gap-2">
