@@ -15,6 +15,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -66,6 +69,9 @@ export default function MasterTasks() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [page, setPage] = useState(0);
   const perPage = 25;
+  const [bulkMode, setBulkMode] = useState<null | "trade" | "duration" | "status">(null);
+  const [bulkValue, setBulkValue] = useState<string>("");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const fetchTasks = async () => {
     const { data } = await supabase
@@ -170,6 +176,35 @@ export default function MasterTasks() {
     fetchTasks();
   };
 
+  const openBulk = (mode: "trade" | "duration" | "status") => {
+    setBulkValue("");
+    setBulkMode(mode);
+  };
+
+  const handleBulkApply = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length || !bulkMode) return;
+    const payload: any = {};
+    if (bulkMode === "trade") {
+      if (!bulkValue.trim()) { toast({ title: "Enter a trade", variant: "destructive" }); return; }
+      payload.default_trade = bulkValue.trim();
+    } else if (bulkMode === "duration") {
+      const n = Number(bulkValue);
+      if (!n || n < 1) { toast({ title: "Enter a valid duration (days)", variant: "destructive" }); return; }
+      payload.default_duration = n;
+    } else if (bulkMode === "status") {
+      if (!bulkValue) { toast({ title: "Pick a status", variant: "destructive" }); return; }
+      payload.status = bulkValue;
+    }
+    setBulkSaving(true);
+    const { error } = await supabase.from("master_tasks").update(payload).in("id", ids);
+    setBulkSaving(false);
+    if (error) { toast({ title: "Bulk update failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${ids.length} task(s) updated` });
+    setBulkMode(null);
+    fetchTasks();
+  };
+
   const exportCSV = () => {
     const rows = selected.size > 0 ? tasks.filter(t => selected.has(t.id)) : filtered;
     const headers = ["Name", "Category", "Default Duration", "Default Trade", "Description", "Status"];
@@ -217,8 +252,11 @@ export default function MasterTasks() {
           </SelectContent>
         </Select>
         {selected.size > 0 && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
             <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+            <Button variant="outline" size="sm" onClick={() => openBulk("trade")}>Set trade</Button>
+            <Button variant="outline" size="sm" onClick={() => openBulk("duration")}>Set duration</Button>
+            <Button variant="outline" size="sm" onClick={() => openBulk("status")}>Set status</Button>
             <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="h-4 w-4 mr-1" /> Delete
             </Button>
@@ -339,6 +377,55 @@ export default function MasterTasks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Edit Dialog */}
+      <Dialog open={!!bulkMode} onOpenChange={(o) => !o && setBulkMode(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {bulkMode === "trade" && "Set default trade"}
+              {bulkMode === "duration" && "Set default duration"}
+              {bulkMode === "status" && "Set status"}
+            </DialogTitle>
+            <DialogDescription>
+              Apply this value to {selected.size} selected task{selected.size === 1 ? "" : "s"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {bulkMode === "trade" && (
+              <>
+                <Label>Default trade</Label>
+                <Input value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} placeholder="e.g., Electrical" autoFocus />
+              </>
+            )}
+            {bulkMode === "duration" && (
+              <>
+                <Label>Duration (days)</Label>
+                <Input type="number" min={1} value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} placeholder="e.g., 5" autoFocus />
+              </>
+            )}
+            {bulkMode === "status" && (
+              <>
+                <Label>Status</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkMode(null)}>Cancel</Button>
+            <Button onClick={handleBulkApply} disabled={bulkSaving}>
+              {bulkSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FolderKanban, CalendarDays, FileUp, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({ projects: 0, lookAheads: 0, schedules: 0 });
   const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -29,6 +31,7 @@ export default function Dashboard() {
         lookAheads: lookAheadsRes.data?.length || 0,
         schedules: schedulesRes.data?.length || 0,
       });
+      setLoading(false);
     };
     fetchData();
   }, [profile?.company_id]);
@@ -52,7 +55,9 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        {statCards.map((stat) => (
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)
+        ) : statCards.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
@@ -70,7 +75,11 @@ export default function Dashboard() {
           <CardTitle>Recent Projects</CardTitle>
         </CardHeader>
         <CardContent>
-          {projects.length === 0 ? (
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+            </div>
+          ) : projects.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <FolderKanban className="mx-auto h-12 w-12 mb-3 opacity-50" />
               <p>No projects yet. Create your first project to get started.</p>

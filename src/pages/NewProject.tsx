@@ -12,6 +12,7 @@ import { ArrowLeft } from "lucide-react";
 export default function NewProject() {
   const { profile } = useAuth();
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
   const [projectNumber, setProjectNumber] = useState("");
   const [client, setClient] = useState("");
   const [location, setLocation] = useState("");
@@ -24,6 +25,11 @@ export default function NewProject() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.company_id) return;
+    if (!name.trim()) {
+      setNameError("Project name is required");
+      toast({ title: "Please fix the highlighted fields", variant: "destructive" });
+      return;
+    }
     setLoading(true);
 
     const { data, error } = await supabase
@@ -68,9 +74,11 @@ export default function NewProject() {
                 id="projectName"
                 placeholder="Project name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
+                onChange={(e) => { setName(e.target.value); if (nameError) setNameError(""); }}
+                aria-invalid={!!nameError}
+                className={nameError ? "border-destructive" : ""}
               />
+              {nameError && <p className="text-xs text-destructive">{nameError}</p>}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
