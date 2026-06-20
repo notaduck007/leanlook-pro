@@ -239,12 +239,13 @@ export default function SubContractors() {
     return null;
   };
 
-  const FormField = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
+  const FormField = ({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) => (
     <div className="space-y-1.5">
       <Label className="text-sm">
         {label} {required && <span className="text-destructive">*</span>}
       </Label>
       {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 
@@ -398,19 +399,22 @@ export default function SubContractors() {
         <SheetContent className="overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{editingSub ? "Edit Subcontractor" : "Add Subcontractor"}</SheetTitle>
+            <SheetDescription>
+              {editingSub ? "Update this subcontractor's information." : "Add a new subcontractor to your master database."}
+            </SheetDescription>
           </SheetHeader>
           <div className="space-y-4 mt-6">
-            <FormField label="Company Name" required>
-              <Input value={form.company_name || ""} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+            <FormField label="Company Name" required error={errors.company_name}>
+              <Input className={errors.company_name ? "border-destructive" : ""} value={form.company_name || ""} onChange={(e) => { setForm({ ...form, company_name: e.target.value }); if (errors.company_name) setErrors({ ...errors, company_name: "" }); }} />
             </FormField>
-            <FormField label="Trade / Specialty" required>
-              <Input value={form.trade || ""} onChange={(e) => setForm({ ...form, trade: e.target.value })} placeholder="e.g., Electrical, Plumbing" />
+            <FormField label="Trade / Specialty" required error={errors.trade}>
+              <Input className={errors.trade ? "border-destructive" : ""} value={form.trade || ""} onChange={(e) => { setForm({ ...form, trade: e.target.value }); if (errors.trade) setErrors({ ...errors, trade: "" }); }} placeholder="e.g., Electrical, Plumbing" />
             </FormField>
-            <FormField label="Primary Contact Name" required>
-              <Input value={form.contact_name || ""} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} />
+            <FormField label="Primary Contact Name" required error={errors.contact_name}>
+              <Input className={errors.contact_name ? "border-destructive" : ""} value={form.contact_name || ""} onChange={(e) => { setForm({ ...form, contact_name: e.target.value }); if (errors.contact_name) setErrors({ ...errors, contact_name: "" }); }} />
             </FormField>
-            <FormField label="Phone" required>
-              <Input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="(xxx) xxx-xxxx" />
+            <FormField label="Phone" required error={errors.phone}>
+              <Input className={errors.phone ? "border-destructive" : ""} value={form.phone || ""} onChange={(e) => { setForm({ ...form, phone: e.target.value }); if (errors.phone) setErrors({ ...errors, phone: "" }); }} placeholder="(xxx) xxx-xxxx" />
             </FormField>
             <FormField label="Email">
               <Input type="email" value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
