@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TaskTemplateManager } from "@/components/project/TaskTemplateManager";
 import { UserManagement } from "@/components/settings/UserManagement";
+import { NotificationsAdmin } from "@/components/settings/NotificationsAdmin";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings as SettingsIcon, Users, Palette, Tag } from "lucide-react";
+import { Settings as SettingsIcon, Users, Palette, Tag, Bell } from "lucide-react";
 
 export default function Settings() {
   const { profile, roles } = useAuth();
@@ -34,6 +35,11 @@ export default function Settings() {
           {isAdmin && (
             <TabsTrigger value="templates" className="gap-1.5">
               <Tag className="h-3.5 w-3.5" /> Templates
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="notifications" className="gap-1.5">
+              <Bell className="h-3.5 w-3.5" /> Notifications
             </TabsTrigger>
           )}
         </TabsList>
@@ -87,6 +93,11 @@ export default function Settings() {
         {isAdmin && (
           <TabsContent value="templates">
             <TaskTemplateManager />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value="notifications">
+            <NotificationsAdmin />
           </TabsContent>
         )}
       </Tabs>
