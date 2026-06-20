@@ -665,6 +665,7 @@ export function UserManagement() {
             <DialogDescription>
               Update display name and role assignments.
             </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Display Name</Label>
