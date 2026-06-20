@@ -115,17 +115,15 @@ export function MobileTaskCard({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {projectId && (
-            <div className="group/row">
-              <RowConstraintsPopover
-                projectId={projectId}
-                lookaheadLineId={line.id}
-                taskName={line.task_name || line.custom_text || "Untitled"}
-                linked={linkedConstraints || []}
-                projectOpen={projectOpenConstraints || []}
-                onChanged={() => onConstraintsChanged?.()}
-                readOnly={readOnly}
-              />
-            </div>
+            <RowConstraintsPopover
+              projectId={projectId}
+              lookaheadLineId={line.id}
+              taskName={line.task_name || line.custom_text || "Untitled"}
+              linked={linkedConstraints || []}
+              projectOpen={projectOpenConstraints || []}
+              onChanged={() => onConstraintsChanged?.()}
+              readOnly={readOnly}
+            />
           )}
           {!readOnly && onDeleteLine && (
             <button
