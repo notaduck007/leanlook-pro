@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { StatusCell, DayStatus, StatusCellTooltipData } from "./StatusCell";
 import { StatusDetailPopover } from "./StatusDetailPopover";
 import { VarianceReasonPopover, getVarianceDotColor, VarianceReason } from "./VarianceReasonPopover";
+import { VARIANCE_REASONS } from "./VarianceReasonPopover";
 import { ChevronDown, ChevronRight, Trash2, GripVertical, Plus, EyeOff, RotateCcw, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
@@ -426,24 +427,30 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         {/* Root Cause */}
         <td className="py-1.5 px-1 min-w-[100px]">
           {readOnly ? (
-            <span className="text-xs text-muted-foreground">{line.materials_needed || ""}</span>
+            <span className="text-xs text-muted-foreground">
+              {line.variance_reason
+                ? VARIANCE_REASONS.find((r) => r.key === line.variance_reason)?.label || ""
+                : ""}
+            </span>
           ) : (
             <Select
-              value={line.materials_needed || "__none__"}
-              onValueChange={(value) => onFieldChange(line.id, "materials_needed", value === "__none__" ? "" : value)}
+              value={line.variance_reason || "__none__"}
+              onValueChange={(value) =>
+                onVarianceChange?.(
+                  line.id,
+                  value === "__none__" ? null : value,
+                  line.variance_note || null
+                )
+              }
             >
               <SelectTrigger className="w-full text-xs h-auto py-1 px-1 border-0 bg-transparent focus:ring-1 focus:ring-ring">
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">—</SelectItem>
-                <SelectItem value="Make Ready">Make Ready</SelectItem>
-                <SelectItem value="Manpower">Manpower</SelectItem>
-                <SelectItem value="Material/Equipment">Material/Equipment</SelectItem>
-                <SelectItem value="Design">Design</SelectItem>
-                <SelectItem value="Weather">Weather</SelectItem>
-                <SelectItem value="AHJ">AHJ</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
+                {VARIANCE_REASONS.map((r) => (
+                  <SelectItem key={r.key} value={r.key}>{r.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}

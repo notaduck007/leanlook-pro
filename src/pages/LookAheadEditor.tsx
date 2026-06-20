@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical, Download, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, SendHorizonal, Loader2, Plus, Sparkles, FileDown, CheckCircle, XCircle, Copy, Search, Trash2, Check, CircleDot, MoreVertical, Download, Eye, EyeOff, RotateCcw, Sunrise } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -1110,6 +1110,9 @@ export default function LookAheadEditor() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => navigate("/huddle")}>
+            <Sunrise className="mr-1 h-3.5 w-3.5" /> Huddle
+          </Button>
           {canReview && lookAhead?.status === "submitted" && (
             <>
               <Button size="sm" variant="outline" className="text-green-600 border-green-300 hover:bg-green-50" onClick={handleApprove}>
