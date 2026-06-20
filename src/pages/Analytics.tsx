@@ -498,6 +498,10 @@ export default function Analytics() {
         )}
       </div>
 
+      {/* Variance Pareto & Corrective Actions */}
+      <VarianceParetoChart />
+      <CorrectiveActionsLog />
+
       {/* Project Breakdown Table */}
       <Card>
         <CardHeader>
