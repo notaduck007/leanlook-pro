@@ -66,6 +66,9 @@ export default function MasterTasks() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [page, setPage] = useState(0);
   const perPage = 25;
+  const [bulkMode, setBulkMode] = useState<null | "trade" | "duration" | "status">(null);
+  const [bulkValue, setBulkValue] = useState<string>("");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const fetchTasks = async () => {
     const { data } = await supabase
@@ -167,6 +170,35 @@ export default function MasterTasks() {
     toast({ title: `${ids.length} task(s) deleted` });
     setSelected(new Set());
     setDeleteOpen(false);
+    fetchTasks();
+  };
+
+  const openBulk = (mode: "trade" | "duration" | "status") => {
+    setBulkValue("");
+    setBulkMode(mode);
+  };
+
+  const handleBulkApply = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length || !bulkMode) return;
+    const payload: any = {};
+    if (bulkMode === "trade") {
+      if (!bulkValue.trim()) { toast({ title: "Enter a trade", variant: "destructive" }); return; }
+      payload.default_trade = bulkValue.trim();
+    } else if (bulkMode === "duration") {
+      const n = Number(bulkValue);
+      if (!n || n < 1) { toast({ title: "Enter a valid duration (days)", variant: "destructive" }); return; }
+      payload.default_duration = n;
+    } else if (bulkMode === "status") {
+      if (!bulkValue) { toast({ title: "Pick a status", variant: "destructive" }); return; }
+      payload.status = bulkValue;
+    }
+    setBulkSaving(true);
+    const { error } = await supabase.from("master_tasks").update(payload).in("id", ids);
+    setBulkSaving(false);
+    if (error) { toast({ title: "Bulk update failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${ids.length} task(s) updated` });
+    setBulkMode(null);
     fetchTasks();
   };
 
