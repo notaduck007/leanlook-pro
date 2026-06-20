@@ -12,6 +12,13 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { SubContractorAutocomplete } from "@/components/subcontractors/SubContractorAutocomplete";
 import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/MasterAutocomplete";
@@ -421,20 +428,24 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           {readOnly ? (
             <span className="text-xs text-muted-foreground">{line.materials_needed || ""}</span>
           ) : (
-            <select
-              className="w-full text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-ring rounded px-1 py-0.5 cursor-pointer"
+            <Select
               value={line.materials_needed || ""}
-              onChange={(e) => onFieldChange(line.id, "materials_needed", e.target.value)}
+              onValueChange={(value) => onFieldChange(line.id, "materials_needed", value)}
             >
-              <option value="">—</option>
-              <option value="Make Ready">Make Ready</option>
-              <option value="Manpower">Manpower</option>
-              <option value="Material/Equipment">Material/Equipment</option>
-              <option value="Design">Design</option>
-              <option value="Weather">Weather</option>
-              <option value="AHJ">AHJ</option>
-              <option value="Other">Other</option>
-            </select>
+              <SelectTrigger className="w-full text-xs h-auto py-1 px-1 border-0 bg-transparent focus:ring-1 focus:ring-ring">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">—</SelectItem>
+                <SelectItem value="Make Ready">Make Ready</SelectItem>
+                <SelectItem value="Manpower">Manpower</SelectItem>
+                <SelectItem value="Material/Equipment">Material/Equipment</SelectItem>
+                <SelectItem value="Design">Design</SelectItem>
+                <SelectItem value="Weather">Weather</SelectItem>
+                <SelectItem value="AHJ">AHJ</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
           )}
         </td>
 
