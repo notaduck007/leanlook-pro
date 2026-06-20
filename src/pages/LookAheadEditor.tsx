@@ -1433,6 +1433,7 @@ export default function LookAheadEditor() {
                   onDeleteLine={handleDeleteLine}
                   onNameChange={handleNameChange}
                   readOnly={isReadOnly}
+                  actualsOnly={isActualsOnly}
                   projectId={projectId}
                   linkedConstraints={linkedConstraintsByLine[line.id] || []}
                   projectOpenConstraints={projectConstraints}
