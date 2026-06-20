@@ -268,7 +268,11 @@ export default function Analytics() {
     approved: lookaheads.filter((l) => l.status === "approved").length,
   }), [projects, lookaheads]);
 
-  const approvalRate = totals.lookaheads > 0 ? Math.round((totals.approved / totals.lookaheads) * 100) : 0;
+  // Approval rate = approved / (approved + rejected). Drafts and submitted
+  // haven't been reviewed yet and should NOT dilute the rate. Show "—" when
+  // nothing has been reviewed.
+  const reviewedCount = totals.approved + lookaheads.filter((l) => l.status === "rejected").length;
+  const approvalRate = reviewedCount > 0 ? Math.round((totals.approved / reviewedCount) * 100) : null;
 
   if (loading) {
     return (
@@ -345,7 +349,7 @@ export default function Analytics() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Approval Rate</p>
-                <p className="text-3xl font-bold">{approvalRate}%</p>
+                <p className="text-3xl font-bold">{approvalRate === null ? "—" : `${approvalRate}%`}</p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
             </div>
