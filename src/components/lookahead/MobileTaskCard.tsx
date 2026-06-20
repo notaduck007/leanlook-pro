@@ -250,28 +250,6 @@ export function MobileTaskCard({
               />
             )}
           </div>
-          {!readOnly && onVarianceChange && (
-            <div>
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Root cause (for variances)</label>
-              <VarianceReasonPopover
-                open={false}
-                onOpenChange={() => {}}
-                onSelect={(reason, note) => onVarianceChange(line.id, reason, note || null)}
-              >
-                <button type="button" className="w-full flex items-center gap-2 text-sm border rounded px-2 py-2 mt-0.5">
-                  {varianceLabel ? (
-                    <>
-                      <span className={cn("w-2 h-2 rounded-full", getVarianceDotColor(line.variance_reason as VarianceReason))} />
-                      <span>{varianceLabel}</span>
-                      {line.variance_note && <span className="text-muted-foreground truncate">— {line.variance_note}</span>}
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">No root cause</span>
-                  )}
-                </button>
-              </VarianceReasonPopover>
-            </div>
-          )}
         </div>
       )}
     </div>
