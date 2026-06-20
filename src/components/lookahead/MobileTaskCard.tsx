@@ -182,6 +182,8 @@ export function MobileTaskCard({
               open={variancePopoverOpen}
               onOpenChange={setVariancePopoverOpen}
               onSelect={(reason, note) => onVarianceChange(line.id, reason, note || null)}
+              projectId={projectId}
+              lookaheadLineId={line.id}
             >
               <button
                 type="button"
