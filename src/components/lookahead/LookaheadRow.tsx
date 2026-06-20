@@ -429,14 +429,14 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
             <span className="text-xs text-muted-foreground">{line.materials_needed || ""}</span>
           ) : (
             <Select
-              value={line.materials_needed || ""}
-              onValueChange={(value) => onFieldChange(line.id, "materials_needed", value)}
+              value={line.materials_needed || "__none__"}
+              onValueChange={(value) => onFieldChange(line.id, "materials_needed", value === "__none__" ? "" : value)}
             >
               <SelectTrigger className="w-full text-xs h-auto py-1 px-1 border-0 bg-transparent focus:ring-1 focus:ring-ring">
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">—</SelectItem>
+                <SelectItem value="__none__">—</SelectItem>
                 <SelectItem value="Make Ready">Make Ready</SelectItem>
                 <SelectItem value="Manpower">Manpower</SelectItem>
                 <SelectItem value="Material/Equipment">Material/Equipment</SelectItem>
