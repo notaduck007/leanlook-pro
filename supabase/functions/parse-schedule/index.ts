@@ -555,8 +555,17 @@ Be thorough - extract EVERY single task. Preserve the exact hierarchy structure.
       )
     );
 
+    // Detect dateless schedules so the client can warn the user.
+    const withDates = taskInserts.filter((t: any) => t.start_date || t.finish_date).length;
+    const datesMissing = taskInserts.length > 0 && withDates === 0;
+
     return new Response(
-      JSON.stringify({ success: true, task_count: taskInserts.length }),
+      JSON.stringify({
+        success: true,
+        task_count: taskInserts.length,
+        tasks_with_dates: withDates,
+        dates_missing: datesMissing,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
