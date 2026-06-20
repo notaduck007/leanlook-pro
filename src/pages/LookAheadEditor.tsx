@@ -994,12 +994,19 @@ export default function LookAheadEditor() {
   }
 
   const isOwner = lookAhead?.super_id === user?.id;
-  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  const isApproved = lookAhead?.status === "approved";
+  const isRejected = lookAhead?.status === "rejected";
+  // Approved and rejected look-aheads are locked for EVERYONE (must be
+  // reopened to edit). Submitted is read-only for non-reviewers only.
+  const isReadOnly =
+    isApproved ||
+    isRejected ||
+    (lookAhead?.status === "submitted" && !canReview);
   isReadOnlyRef.current = isReadOnly;
+  const canReopen = (isApproved || isRejected) && (isOwner || canReview);
 
   // Today's date string for column highlighting
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const isRejected = lookAhead?.status === "rejected";
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
@@ -1008,31 +1015,23 @@ export default function LookAheadEditor() {
   filteredLinesRef.current = flatFilteredLines;
   datesRef.current = dates;
 
-  // PPC calculation
+  // PPC calculation — uses the shared binary helper (only "Y" counts as
+  // complete; "50"/"progress" contribute 0). Computed across the full
+  // 14-day window so the editor header matches the project chart & Analytics.
   const ppcStats = (() => {
-    let completed = 0;
-    let planned = 0;
+    const { completed, resolved, ppc } = computePPC(lines);
     const perDay: Record<string, { completed: number; total: number }> = {};
-
-    const currentWeekDates = dates.slice(0, 7);
     dates.forEach((d) => { perDay[d] = { completed: 0, total: 0 }; });
-
     lines.forEach((l) => {
-      currentWeekDates.forEach((d) => {
+      dates.forEach((d) => {
         const s = l.status_per_day[d] as DayStatus;
         if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
-          planned++;
           perDay[d].total++;
-          if (s === "Y") {
-            completed++;
-            perDay[d].completed++;
-          }
+          if (s === "Y") perDay[d].completed++;
         }
       });
     });
-
-    const ppc = planned > 0 ? Math.round((completed / planned) * 100) : null;
-    return { completed, planned, ppc, perDay };
+    return { completed, planned: resolved, ppc: resolved > 0 ? ppc : null, perDay };
   })();
 
   const renderSaveStatus = () => {
