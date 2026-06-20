@@ -373,6 +373,7 @@ export type Database = {
           rank: number | null
           resolved_at: string | null
           status: string
+          task_id: string | null
           type: string
           updated_at: string
         }
@@ -390,6 +391,7 @@ export type Database = {
           rank?: number | null
           resolved_at?: string | null
           status?: string
+          task_id?: string | null
           type?: string
           updated_at?: string
         }
@@ -407,6 +409,7 @@ export type Database = {
           rank?: number | null
           resolved_at?: string | null
           status?: string
+          task_id?: string | null
           type?: string
           updated_at?: string
         }
@@ -430,6 +433,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_constraints_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
