@@ -18,11 +18,13 @@ type LookaheadRow = {
 };
 
 type LineRow = {
+  id: string;
   lookahead_id: string;
   status_per_day: Record<string, string> | null;
   assigned_trade: string | null;
   task_id: string | null;
   custom_text: string | null;
+  parent_line_id: string | null;
 };
 
 type TaskRow = {
@@ -87,7 +89,7 @@ export default function Analytics() {
       if (relevantIds.length > 0) {
         const { data: lineData } = await supabase
           .from("lookahead_lines")
-          .select("lookahead_id, status_per_day, assigned_trade, task_id, custom_text")
+          .select("id, lookahead_id, status_per_day, assigned_trade, task_id, custom_text, parent_line_id")
           .in("lookahead_id", relevantIds);
         setLines((lineData || []) as LineRow[]);
 
@@ -178,10 +180,29 @@ export default function Analytics() {
 
   // Variance analysis: trades with highest failure rates
   const tradeVariance = useMemo(() => {
+    // Subtasks store work-phase words in the "trade" column (prep/execute/
+    // inspect/closeout). Roll subtasks up to their parent's REAL trade so the
+    // breakdown reflects actual trades (Electrical, HVAC, Concrete, etc.).
+    const PHASE_WORDS = new Set(["prep", "execute", "inspect", "closeout"]);
+    const linesById = new Map(lines.map((l) => [l.id, l]));
+    const resolveTrade = (l: LineRow): string | null => {
+      let raw = (l.assigned_trade || "").trim();
+      if (l.parent_line_id) {
+        const parent = linesById.get(l.parent_line_id);
+        if (parent?.assigned_trade) raw = parent.assigned_trade.trim();
+      }
+      if (!raw) return null;
+      // Strip phase words from comma-separated trade fields.
+      const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+      const real = parts.filter((p) => !PHASE_WORDS.has(p.toLowerCase()));
+      if (real.length === 0) return null;
+      return real.join(", ");
+    };
+
     const tradeMap = new Map<string, { planned: number; notCompleted: number }>();
 
     lines.forEach((l) => {
-      const trade = (l.assigned_trade || "Unassigned").trim();
+      const trade = resolveTrade(l);
       if (!trade) return;
       const spd = l.status_per_day || {};
       Object.values(spd).forEach((s) => {

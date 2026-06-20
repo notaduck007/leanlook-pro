@@ -17,6 +17,7 @@ import { DayStatus } from "@/components/lookahead/StatusCell";
 import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { computePPC } from "@/lib/ppc";
 
 import { useMasterTasks } from "@/hooks/useMasterTasks";
 import {
@@ -456,6 +457,20 @@ export default function LookAheadEditor() {
     }
     toast({ title: "Look-ahead sent back for revision.", variant: "destructive" });
     setLookAhead((prev: any) => ({ ...prev, status: "rejected" }));
+  };
+
+  const handleReopen = async () => {
+    if (!lookaheadId) return;
+    const { error } = await supabase
+      .from("look_aheads")
+      .update({ status: "draft", updated_at: new Date().toISOString() } as any)
+      .eq("id", lookaheadId);
+    if (error) {
+      toast({ title: "Could not reopen", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Look-ahead reopened — now editable as draft." });
+    setLookAhead((prev: any) => ({ ...prev, status: "draft" }));
   };
 
   const handleAddCustomLine = async () => {
@@ -993,12 +1008,19 @@ export default function LookAheadEditor() {
   }
 
   const isOwner = lookAhead?.super_id === user?.id;
-  const isReadOnly = (lookAhead?.status === "submitted" || lookAhead?.status === "approved") && !canReview;
+  const isApproved = lookAhead?.status === "approved";
+  const isRejected = lookAhead?.status === "rejected";
+  // Approved and rejected look-aheads are locked for EVERYONE (must be
+  // reopened to edit). Submitted is read-only for non-reviewers only.
+  const isReadOnly =
+    isApproved ||
+    isRejected ||
+    (lookAhead?.status === "submitted" && !canReview);
   isReadOnlyRef.current = isReadOnly;
+  const canReopen = (isApproved || isRejected) && (isOwner || canReview);
 
   // Today's date string for column highlighting
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const isRejected = lookAhead?.status === "rejected";
 
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
@@ -1007,31 +1029,23 @@ export default function LookAheadEditor() {
   filteredLinesRef.current = flatFilteredLines;
   datesRef.current = dates;
 
-  // PPC calculation
+  // PPC calculation — uses the shared binary helper (only "Y" counts as
+  // complete; "50"/"progress" contribute 0). Computed across the full
+  // 14-day window so the editor header matches the project chart & Analytics.
   const ppcStats = (() => {
-    let completed = 0;
-    let planned = 0;
+    const { completed, resolved, ppc } = computePPC(lines);
     const perDay: Record<string, { completed: number; total: number }> = {};
-
-    const currentWeekDates = dates.slice(0, 7);
     dates.forEach((d) => { perDay[d] = { completed: 0, total: 0 }; });
-
     lines.forEach((l) => {
-      currentWeekDates.forEach((d) => {
+      dates.forEach((d) => {
         const s = l.status_per_day[d] as DayStatus;
         if (s === "Y" || s === "N" || s === "50" || s === "planned" || s === "progress") {
-          planned++;
           perDay[d].total++;
-          if (s === "Y") {
-            completed++;
-            perDay[d].completed++;
-          }
+          if (s === "Y") perDay[d].completed++;
         }
       });
     });
-
-    const ppc = planned > 0 ? Math.round((completed / planned) * 100) : null;
-    return { completed, planned, ppc, perDay };
+    return { completed, planned: resolved, ppc: resolved > 0 ? ppc : null, perDay };
   })();
 
   const renderSaveStatus = () => {
@@ -1089,7 +1103,18 @@ export default function LookAheadEditor() {
               </Button>
             </>
           )}
-          {isOwner && (lookAhead?.status === "draft" || isRejected) && (
+          {isReadOnly && (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground border">
+              <CheckCircle className="h-3 w-3" />
+              Read-only — {lookAhead?.status}
+            </span>
+          )}
+          {canReopen && (
+            <Button size="sm" variant="outline" onClick={handleReopen}>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reopen / Revise
+            </Button>
+          )}
+          {isOwner && lookAhead?.status === "draft" && (
             <>
               {/* Desktop: show all buttons */}
               <div className="hidden md:flex items-center gap-2">
