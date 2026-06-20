@@ -249,8 +249,11 @@ export default function MasterTasks() {
           </SelectContent>
         </Select>
         {selected.size > 0 && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
             <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+            <Button variant="outline" size="sm" onClick={() => openBulk("trade")}>Set trade</Button>
+            <Button variant="outline" size="sm" onClick={() => openBulk("duration")}>Set duration</Button>
+            <Button variant="outline" size="sm" onClick={() => openBulk("status")}>Set status</Button>
             <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="h-4 w-4 mr-1" /> Delete
             </Button>
