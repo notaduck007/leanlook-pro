@@ -8,6 +8,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, parseISO } from "date-fns";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 import { computePPC as sharedComputePPC } from "@/lib/ppc";
+import { VarianceParetoChart } from "@/components/analytics/VarianceParetoChart";
+import { CorrectiveActionsLog } from "@/components/analytics/CorrectiveActionsLog";
 
 type LookaheadRow = {
   id: string;
@@ -495,6 +497,10 @@ export default function Analytics() {
           </Card>
         )}
       </div>
+
+      {/* Variance Pareto & Corrective Actions */}
+      <VarianceParetoChart />
+      <CorrectiveActionsLog />
 
       {/* Project Breakdown Table */}
       <Card>

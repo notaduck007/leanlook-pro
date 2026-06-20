@@ -6,6 +6,8 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { CorrectiveActionDialog } from "./CorrectiveActionDialog";
+import { Lightbulb } from "lucide-react";
 
 export type VarianceReason =
   | "make_ready"
@@ -36,6 +38,9 @@ interface VarianceReasonPopoverProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (reason: VarianceReason, note: string) => void;
   children: React.ReactNode;
+  /** Show a "5-Whys & corrective action…" link when provided. */
+  projectId?: string;
+  lookaheadLineId?: string;
 }
 
 export function VarianceReasonPopover({
@@ -43,8 +48,12 @@ export function VarianceReasonPopover({
   onOpenChange,
   onSelect,
   children,
+  projectId,
+  lookaheadLineId,
 }: VarianceReasonPopoverProps) {
   const [note, setNote] = useState("");
+  const [selectedReason, setSelectedReason] = useState<VarianceReason>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleSelect = (reason: VarianceReason & string) => {
     onSelect(reason, note);
@@ -53,6 +62,7 @@ export function VarianceReasonPopover({
   };
 
   return (
+    <>
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
@@ -92,8 +102,32 @@ export function VarianceReasonPopover({
             }}
           />
         </div>
+        {projectId && (
+          <button
+            type="button"
+            onClick={() => {
+              setDialogOpen(true);
+              onOpenChange(false);
+            }}
+            className="mt-2 w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] text-primary hover:bg-accent transition-colors border-t border-border/60 -mx-2 -mb-2 pt-2 mt-2 pl-3"
+          >
+            <Lightbulb className="h-3 w-3" />
+            5-Whys & corrective action…
+          </button>
+        )}
       </PopoverContent>
     </Popover>
+    {projectId && (
+      <CorrectiveActionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        projectId={projectId}
+        lookaheadLineId={lookaheadLineId || null}
+        defaultReason={selectedReason}
+        defaultNote={note}
+      />
+    )}
+    </>
   );
 }
 

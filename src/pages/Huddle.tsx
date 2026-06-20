@@ -335,6 +335,8 @@ export default function Huddle() {
                         open={variancePopoverId === line.id}
                         onOpenChange={(open) => setVariancePopoverId(open ? line.id : null)}
                         onSelect={(reason, note) => saveVariance(line, reason, note)}
+                        projectId={line.project_id}
+                        lookaheadLineId={line.id}
                       >
                         <button
                           type="button"
