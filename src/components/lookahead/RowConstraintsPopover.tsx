@@ -64,7 +64,9 @@ export function RowConstraintsPopover({
             title={hasOpen ? `${linked.length} open constraint(s)` : "Constraints"}
             className={cn(
               "p-1 rounded hover:bg-accent shrink-0 transition-colors",
-              hasOpen ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground opacity-0 group-hover/row:opacity-100"
+              hasOpen
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground/50 hover:text-muted-foreground"
             )}
           >
             <AlertTriangle className={cn("h-3.5 w-3.5", hasOpen && "fill-amber-200 dark:fill-amber-900")} />
