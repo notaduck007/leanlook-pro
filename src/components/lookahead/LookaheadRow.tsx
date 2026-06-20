@@ -81,6 +81,8 @@ interface LookaheadRowProps {
   onExpectedDateChange?: (lineId: string, date: string | null) => void;
   onVarianceChange?: (lineId: string, reason: string | null, note: string | null) => void;
   readOnly?: boolean;
+  /** Approved/rejected: structure locked, but day actuals & variance editable */
+  actualsOnly?: boolean;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
   masterTasks?: MasterTaskRecord[];
@@ -93,7 +95,13 @@ interface LookaheadRowProps {
   onConstraintsChanged?: () => void;
 }
 
-export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, onVarianceChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden, variancePopoverLineDate, onVariancePopoverChange, projectId, linkedConstraintsByLine, projectOpenConstraints, onConstraintsChanged }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, onVarianceChange, readOnly, actualsOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden, variancePopoverLineDate, onVariancePopoverChange, projectId, linkedConstraintsByLine, projectOpenConstraints, onConstraintsChanged }: LookaheadRowProps) {
+  // Structural fields (name, trade, notes, materials, free-text constraints,
+  // add/remove/reorder/hide) are locked whenever the row is read-only OR
+  // we're in actuals-only mode.
+  const structureLocked = readOnly || actualsOnly;
+  // Variance reason/note is editable in actuals-only mode.
+  const varianceLocked = readOnly && !actualsOnly;
   const [collapsed, setCollapsed] = useState(false);
   const [popoverLineId, setPopoverLineId] = useState<string | null>(null);
   const depth = line.depth || 0;
@@ -207,7 +215,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         {/* Task Name */}
         <td className="py-1.5 px-2 sticky left-0 bg-card z-10 min-w-[200px] max-w-[280px]">
           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
-            {!readOnly && onToggleHidden && (
+            {!structureLocked && onToggleHidden && (
               <input
                 type="checkbox"
                 checked={isHidden}
@@ -216,7 +224,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                 title={isHidden ? "Unhide row" : "Hide row"}
               />
             )}
-            {!readOnly && (
+            {!structureLocked && (
               <button {...attributes} {...listeners} className="p-0.5 cursor-grab hover:bg-accent rounded touch-none">
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
@@ -261,7 +269,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                 </TooltipContent>
               </Tooltip>
             )}
-            {readOnly ? (
+            {structureLocked ? (
               <span className={cn("text-sm truncate", line.is_parent && "font-semibold", isSubtask && "text-muted-foreground", isHidden && "line-through")}>
                 {line.task_name || line.custom_text || "—"}
                 {collapsed && carriedChildCount > 0 && (
@@ -281,7 +289,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                 />
               </div>
             )}
-            {!readOnly && !isSubtask && onAddSubtask && (
+            {!structureLocked && !isSubtask && onAddSubtask && (
               <button
                 onClick={() => onAddSubtask(line.id)}
                 className="p-0.5 text-muted-foreground hover:text-primary rounded hover:bg-accent transition-colors opacity-0 group-hover/row:opacity-100"
@@ -306,7 +314,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
 
         {/* Trade */}
         <td className="py-1.5 px-1 min-w-[120px]">
-          {readOnly ? (
+          {structureLocked ? (
             <span className="text-xs text-muted-foreground">{line.assigned_trade || ""}</span>
           ) : (
             <SubContractorAutocomplete
@@ -404,6 +412,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                       }}
                       isWeekend={isWeekend}
                       readOnly={readOnly}
+                      actualsOnly={actualsOnly}
                       cellKey={cellKey}
                       onRegisterRef={onRegisterRef}
                       onNavigate={onNavigate}
@@ -431,7 +440,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
 
         {/* Notes */}
         <td className="py-1.5 px-1 min-w-[120px]">
-          {readOnly ? (
+          {structureLocked ? (
             <span className="text-xs text-muted-foreground">{line.notes || ""}</span>
           ) : (
             <input
@@ -445,7 +454,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
 
         {/* Root Cause */}
         <td className="py-1.5 px-1 min-w-[100px]">
-          {readOnly ? (
+          {varianceLocked ? (
             <span className="text-xs text-muted-foreground">
               {line.variance_reason
                 ? VARIANCE_REASONS.find((r) => r.key === line.variance_reason)?.label || ""
@@ -477,7 +486,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
 
         {/* Constraints */}
         <td className="py-1.5 px-1 min-w-[100px]">
-          {readOnly ? (
+          {structureLocked ? (
             <span className="text-xs text-muted-foreground">{line.constraints || ""}</span>
           ) : (
             <input
@@ -490,7 +499,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
         </td>
 
         {/* Delete */}
-        {!readOnly && onDeleteLine && (
+        {!structureLocked && onDeleteLine && (
           <td className="py-1.5 px-1 w-8">
             <button
               onClick={() => onDeleteLine(line.id)}
@@ -519,6 +528,7 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           onExpectedDateChange={onExpectedDateChange}
           onVarianceChange={onVarianceChange}
           readOnly={readOnly}
+          actualsOnly={actualsOnly}
           onRegisterRef={onRegisterRef}
           onNavigate={onNavigate}
           masterTasks={masterTasks}

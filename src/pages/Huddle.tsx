@@ -26,6 +26,7 @@ type HuddleLine = {
   constraints: string | null;
   variance_reason: string | null;
   variance_note: string | null;
+  parent_status: string; // draft | submitted | approved | rejected
 };
 
 const STATUS_CYCLE: DayStatus[] = ["", "planned", "progress", "Y", "N", "50"];
@@ -87,6 +88,7 @@ export default function Huddle() {
 
       const projectMap = (projects || []).reduce<Record<string, string>>((a, p) => ({ ...a, [p.id]: p.name }), {});
       const laToProject = inWindow.reduce<Record<string, string>>((a, l) => ({ ...a, [l.id]: l.project_id }), {});
+      const laToStatus = inWindow.reduce<Record<string, string>>((a, l) => ({ ...a, [l.id]: (l as any).status || "draft" }), {});
 
       const taskIds = (linesData || []).filter((l) => l.task_id).map((l) => l.task_id as string);
       let taskMap: Record<string, string> = {};
@@ -110,6 +112,7 @@ export default function Huddle() {
             constraints: l.constraints,
             variance_reason: (l as any).variance_reason || null,
             variance_note: (l as any).variance_note || null,
+            parent_status: laToStatus[l.lookahead_id] || "draft",
           };
         });
 
@@ -138,15 +141,25 @@ export default function Huddle() {
     return () => { cancelled = true; };
   }, [profile?.company_id, dateStr]);
 
-  // Tasks committed for the selected day (any non-empty status today)
+  // Show all committed task rows whose look-ahead covers this day —
+  // i.e. the row has at least one non-empty status somewhere in the
+  // look-ahead window (so we exclude rows that were never committed at all).
+  // Today's cell may still be empty (rendered as "Tap to set").
   const todaysLines = useMemo(
-    () => lines.filter((l) => !!l.status_per_day[dateStr]),
-    [lines, dateStr]
+    () =>
+      lines.filter((l) => {
+        const values = Object.values(l.status_per_day || {});
+        return values.some((v) => !!v);
+      }),
+    [lines]
   );
 
-  // PPC for today only — use only this day's cells
+  // PPC for today only — counts only cells that actually have a status today.
+  // An empty today-cell does NOT contribute until a status is recorded.
   const ppc = useMemo(() => {
-    const onlyToday = todaysLines.map((l) => ({ status_per_day: { [dateStr]: l.status_per_day[dateStr] } }));
+    const onlyToday = todaysLines
+      .filter((l) => !!l.status_per_day[dateStr])
+      .map((l) => ({ status_per_day: { [dateStr]: l.status_per_day[dateStr] } }));
     return computePPC(onlyToday);
   }, [todaysLines, dateStr]);
 
@@ -162,9 +175,39 @@ export default function Huddle() {
   }, [todaysLines]);
 
   const notDone = todaysLines.filter((l) => l.status_per_day[dateStr] === "N");
-  const openConstraints = todaysLines.filter((l) => (l.constraints || "").trim().length > 0);
+  // Unified open-constraints source: structured constraint log (same as
+  // the amber per-task badge). Flatten to a list with the linked task name
+  // so the count and the summary always match the badges.
+  const openConstraintsList = useMemo(() => {
+    const out: { constraint: ProjectConstraint; line: HuddleLine }[] = [];
+    for (const line of todaysLines) {
+      const arr = openConstraintsByLine[line.id] || [];
+      for (const c of arr) out.push({ constraint: c, line });
+    }
+    return out;
+  }, [todaysLines, openConstraintsByLine]);
 
   const setStatus = async (line: HuddleLine, next: DayStatus) => {
+    const current = (line.status_per_day[dateStr] || "") as DayStatus;
+    const isActualsOnly = line.parent_status === "approved" || line.parent_status === "rejected";
+    if (isActualsOnly) {
+      // Allow updating an existing actual, but don't let the huddle expand
+      // committed scope by turning an empty cell into a planned one.
+      if (!current) {
+        toast({
+          title: "Approved — actuals only",
+          description: "This look-ahead is locked. You can only update cells that already have a status.",
+        });
+        return;
+      }
+      if (next === "planned" || next === "") {
+        toast({
+          title: "Approved — actuals only",
+          description: "You can record actuals (Complete / Not Done / In Progress / 50%) but not change to Planned.",
+        });
+        return;
+      }
+    }
     const newSpd = { ...line.status_per_day, [dateStr]: next };
     setLines((prev) => prev.map((l) => l.id === line.id ? { ...l, status_per_day: newSpd } : l));
     const { error } = await supabase
@@ -180,8 +223,16 @@ export default function Huddle() {
 
   const cycleStatus = (line: HuddleLine) => {
     const cur = (line.status_per_day[dateStr] || "") as DayStatus;
-    const idx = STATUS_CYCLE.indexOf(cur);
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    const isActualsOnly = line.parent_status === "approved" || line.parent_status === "rejected";
+    const cycle: DayStatus[] = isActualsOnly
+      ? (["progress", "Y", "50", "N"] as DayStatus[])
+      : STATUS_CYCLE;
+    if (isActualsOnly && !cur) {
+      toast({ title: "Approved — actuals only", description: "Cell is empty; nothing to update." });
+      return;
+    }
+    const idx = cycle.indexOf(cur);
+    const next = cycle[(idx + 1) % cycle.length];
     setStatus(line, next);
   };
 
@@ -236,7 +287,7 @@ export default function Huddle() {
             <Stat label="Committed" value={todaysLines.length} />
             <Stat label="Complete" value={todaysLines.filter((l) => l.status_per_day[dateStr] === "Y").length} tone="text-emerald-600 dark:text-emerald-400" />
             <Stat label="Not Done" value={notDone.length} tone="text-red-600 dark:text-red-400" />
-            <Stat label="Open Constraints" value={openConstraints.length} tone="text-amber-600 dark:text-amber-400" />
+            <Stat label="Open Constraints" value={openConstraintsList.length} tone="text-amber-600 dark:text-amber-400" />
           </div>
         </CardContent>
       </Card>
@@ -300,6 +351,7 @@ export default function Huddle() {
                     <button
                       type="button"
                       onClick={() => cycleStatus(line)}
+                      aria-label={`Status: ${info.label}. Tap to cycle.`}
                       className={cn(
                         "w-full flex items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm font-semibold min-h-12 touch-manipulation transition-all active:scale-[0.99]",
                         info.tone, info.ring
@@ -308,8 +360,16 @@ export default function Huddle() {
                       <StatusIcon className="h-5 w-5" strokeWidth={2.5} />
                       <span>{info.label}</span>
                     </button>
+                    {(line.parent_status === "approved" || line.parent_status === "rejected") && (
+                      <p className="text-[10px] text-amber-700 dark:text-amber-300 -mt-1">
+                        Approved — actuals only
+                      </p>
+                    )}
                     <div className="grid grid-cols-5 gap-1">
-                      {(["planned", "progress", "Y", "50", "N"] as DayStatus[]).map((s) => {
+                      {(((line.parent_status === "approved" || line.parent_status === "rejected")
+                          ? (["Y", "N", "progress", "50"] as DayStatus[])
+                          : (["Y", "N", "progress", "50", "planned"] as DayStatus[]))
+                      ).map((s) => {
                         const meta = STATUS_INFO[s];
                         const Icon = meta.Icon;
                         const active = s === status;
@@ -375,7 +435,7 @@ export default function Huddle() {
       )}
 
       {/* Blockers & Not-Done summary */}
-      {(notDone.length > 0 || openConstraints.length > 0) && (
+      {(notDone.length > 0 || openConstraintsList.length > 0) && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -406,16 +466,18 @@ export default function Huddle() {
                 </ul>
               </div>
             )}
-            {openConstraints.length > 0 && (
+            {openConstraintsList.length > 0 && (
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Open constraints</div>
                 <ul className="space-y-1">
-                  {openConstraints.map((l) => (
-                    <li key={l.id} className="text-sm flex items-start gap-2">
-                      <Badge variant="outline" className="text-[10px]">{l.project_name}</Badge>
+                  {openConstraintsList.map(({ constraint, line }) => (
+                    <li key={constraint.id} className="text-sm flex items-start gap-2">
+                      <Badge variant="outline" className="text-[10px]">{line.project_name}</Badge>
                       <span className="flex-1">
-                        <span className="font-medium">{l.task_name}</span>
-                        <span className="text-xs text-muted-foreground block">{l.constraints}</span>
+                        <span className="font-medium">{line.task_name}</span>
+                        <span className="text-xs text-muted-foreground block">
+                          {typeLabel(constraint.type)}: {constraint.description}
+                        </span>
                       </span>
                     </li>
                   ))}

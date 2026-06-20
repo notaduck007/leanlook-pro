@@ -1046,13 +1046,16 @@ export default function LookAheadEditor() {
   const isOwner = lookAhead?.super_id === user?.id;
   const isApproved = lookAhead?.status === "approved";
   const isRejected = lookAhead?.status === "rejected";
-  // Approved and rejected look-aheads are locked for EVERYONE (must be
-  // reopened to edit). Submitted is read-only for non-reviewers only.
-  const isReadOnly =
-    isApproved ||
-    isRejected ||
-    (lookAhead?.status === "submitted" && !canReview);
-  isReadOnlyRef.current = isReadOnly;
+  // Approved/Rejected = "actuals mode": STRUCTURE is locked (no add/remove/
+  // rename/reorder/hide/expand-empty-cells) but day actuals (Y/N/50/progress)
+  // and root-cause/notes remain editable so the team can record reality.
+  // Submitted is fully read-only for non-reviewers.
+  const isActualsOnly = isApproved || isRejected;
+  const isStrictReadOnly = lookAhead?.status === "submitted" && !canReview;
+  const isReadOnly = isStrictReadOnly || isActualsOnly;
+  // Autosave must still run for actuals/variance updates in actuals-only
+  // mode — only fully read-only views should block autosave.
+  isReadOnlyRef.current = isStrictReadOnly;
   const canReopen = (isApproved || isRejected) && (isOwner || canReview);
 
   // Today's date string for column highlighting
@@ -1150,7 +1153,7 @@ export default function LookAheadEditor() {
           {isReadOnly && (
             <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground border">
               <CheckCircle className="h-3 w-3" />
-              Read-only — {lookAhead?.status}
+              {isActualsOnly ? `${lookAhead?.status === "approved" ? "Approved" : "Rejected"} — actuals only` : `Read-only — ${lookAhead?.status}`}
             </span>
           )}
           {canReopen && (
@@ -1430,6 +1433,7 @@ export default function LookAheadEditor() {
                   onDeleteLine={handleDeleteLine}
                   onNameChange={handleNameChange}
                   readOnly={isReadOnly}
+                  actualsOnly={isActualsOnly}
                   projectId={projectId}
                   linkedConstraints={linkedConstraintsByLine[line.id] || []}
                   projectOpenConstraints={projectConstraints}
@@ -1555,6 +1559,7 @@ export default function LookAheadEditor() {
                           onExpectedDateChange={handleExpectedDateChange}
                           onVarianceChange={handleVarianceChange}
                           readOnly={isReadOnly}
+                          actualsOnly={isActualsOnly}
                           onRegisterRef={handleRegisterRef}
                           onNavigate={handleCellNavigate}
                           masterTasks={masterTasks}

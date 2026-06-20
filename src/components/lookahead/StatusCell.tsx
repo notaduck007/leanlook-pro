@@ -34,6 +34,13 @@ interface StatusCellProps {
   onChange: (status: DayStatus) => void;
   isWeekend?: boolean;
   readOnly?: boolean;
+  /**
+   * Actuals-only mode: structure is locked but the day status can still be
+   * changed AMONG actuals (Y / N / 50 / progress). Empty/planned cells cannot
+   * be edited (can't expand committed scope). Used when the look-ahead is
+   * approved/rejected.
+   */
+  actualsOnly?: boolean;
   cellKey?: string;
   onRegisterRef?: (key: string, el: HTMLButtonElement | null) => void;
   onNavigate?: (key: string, direction: "up" | "down" | "left" | "right") => void;
@@ -69,7 +76,15 @@ function StatusIcon({ status }: { status: DayStatus }) {
   }
 }
 
-export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onRegisterRef, onNavigate, percentComplete, expectedDate, date, tooltipData }: StatusCellProps) {
+export function StatusCell({ status, onChange, isWeekend, readOnly, actualsOnly, cellKey, onRegisterRef, onNavigate, percentComplete, expectedDate, date, tooltipData }: StatusCellProps) {
+  // In actuals-only mode, only cells that already have a non-empty,
+  // non-"planned" status are editable, and the cycle is restricted to
+  // actuals so users can't create new planned/empty cells.
+  const actualsLocked = actualsOnly && (status === "" || status === "planned");
+  const effectiveReadOnly = readOnly || actualsLocked;
+  const cycleList: DayStatus[] = actualsOnly
+    ? (["progress", "Y", "50", "N"] as DayStatus[])
+    : STATUS_CYCLE;
   const refCallback = useCallback(
     (el: HTMLButtonElement | null) => {
       if (cellKey && onRegisterRef) onRegisterRef(cellKey, el);
@@ -78,13 +93,13 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
   );
 
   const handleClick = () => {
-    if (readOnly) return;
-    const idx = STATUS_CYCLE.indexOf(status);
-    onChange(STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]);
+    if (effectiveReadOnly) return;
+    const idx = cycleList.indexOf(status);
+    onChange(cycleList[(idx + 1) % cycleList.length]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (readOnly) return;
+    if (effectiveReadOnly) return;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
       e.preventDefault();
       const dirMap: Record<string, "up" | "down" | "left" | "right"> = {
@@ -95,17 +110,21 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
     }
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
-      const idx = STATUS_CYCLE.indexOf(status);
-      onChange(STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]);
+      const idx = cycleList.indexOf(status);
+      onChange(cycleList[(idx + 1) % cycleList.length]);
       return;
     }
     const lower = e.key.toLowerCase();
     if (lower in KEY_STATUS_MAP) {
+      const next = KEY_STATUS_MAP[lower];
+      // In actuals-only mode, disallow "p" (planned) which would expand scope.
+      if (actualsOnly && next === "planned") return;
       e.preventDefault();
-      onChange(KEY_STATUS_MAP[lower]);
+      onChange(next);
       return;
     }
     if (e.key === "Backspace" || e.key === "Delete") {
+      if (actualsOnly) return; // can't clear actuals back to empty
       e.preventDefault();
       onChange("");
       return;
@@ -139,24 +158,28 @@ export function StatusCell({ status, onChange, isWeekend, readOnly, cellKey, onR
     try { return format(parseISO(date), "EEEE, MMMM d, yyyy"); } catch { return date; }
   })() : null;
 
-  const titleText = status ? meta.label : "No status — click to set";
+  const titleText = actualsLocked
+    ? "Approved — actuals only (no new cells)"
+    : status
+    ? meta.label
+    : "No status — click to set";
 
   const button = (
     <button
       ref={refCallback}
       type="button"
-      tabIndex={readOnly ? -1 : 0}
+      tabIndex={effectiveReadOnly ? -1 : 0}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      disabled={readOnly}
+      disabled={effectiveReadOnly}
       title={titleText}
       className={cn(
         "w-9 h-9 flex items-center justify-center rounded-md text-xs font-bold select-none touch-manipulation",
         "transition-all duration-100",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
         "active:scale-95",
-        !readOnly && "hover:scale-105 hover:shadow-sm cursor-pointer",
-        readOnly && "cursor-default",
+        !effectiveReadOnly && "hover:scale-105 hover:shadow-sm cursor-pointer",
+        effectiveReadOnly && "cursor-default",
         // Empty
         !status && "bg-gray-50 dark:bg-gray-900 border border-dashed border-gray-200 dark:border-gray-700",
         // Planned

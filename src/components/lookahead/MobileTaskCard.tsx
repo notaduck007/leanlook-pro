@@ -17,6 +17,7 @@ interface MobileTaskCardProps {
   onDeleteLine?: (lineId: string) => void;
   onNameChange?: (lineId: string, newName: string) => void;
   readOnly?: boolean;
+  actualsOnly?: boolean;
   projectId?: string;
   linkedConstraints?: ProjectConstraint[];
   projectOpenConstraints?: ProjectConstraint[];
@@ -44,6 +45,7 @@ export function MobileTaskCard({
   onDeleteLine,
   onNameChange,
   readOnly,
+  actualsOnly,
   projectId,
   linkedConstraints,
   projectOpenConstraints,
@@ -53,6 +55,11 @@ export function MobileTaskCard({
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(line.task_name || line.custom_text || "");
   const [variancePopoverOpen, setVariancePopoverOpen] = useState(false);
+  // Structural fields locked when read-only OR actuals-only.
+  const structureLocked = readOnly || actualsOnly;
+  // Actuals can still flow through in actuals-only mode.
+  const actualsLocked = actualsOnly && (!selectedDate || !line.status_per_day[selectedDate] || line.status_per_day[selectedDate] === "planned");
+  const statusEditDisabled = readOnly || actualsLocked;
 
   const handleNameSave = () => {
     setEditingName(false);
@@ -63,16 +70,20 @@ export function MobileTaskCard({
 
   const currentStatus = (selectedDate ? (line.status_per_day[selectedDate] as DayStatus) || "" : "") as DayStatus;
   const cycleStatus = () => {
-    if (readOnly || !selectedDate) return;
-    const idx = STATUS_CYCLE.indexOf(currentStatus);
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    if (statusEditDisabled || !selectedDate) return;
+    const cycle = actualsOnly
+      ? (["progress", "Y", "50", "N"] as DayStatus[])
+      : STATUS_CYCLE;
+    const idx = cycle.indexOf(currentStatus);
+    const next = cycle[(idx + 1) % cycle.length];
     onStatusChange(line.id, selectedDate, next);
     if (next === "N" && onVarianceChange) {
       setVariancePopoverOpen(true);
     }
   };
   const setStatus = (s: DayStatus) => {
-    if (!selectedDate || readOnly) return;
+    if (!selectedDate || statusEditDisabled) return;
+    if (actualsOnly && (s === "planned" || s === "")) return; // no scope expansion
     onStatusChange(line.id, selectedDate, s);
     if (s === "N" && onVarianceChange) setVariancePopoverOpen(true);
   };
@@ -87,7 +98,7 @@ export function MobileTaskCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          {editingName && !readOnly ? (
+          {editingName && !structureLocked ? (
             <input
               className="w-full text-base font-medium bg-transparent border-0 border-b border-ring outline-none px-1 py-1"
               value={nameValue}
@@ -98,9 +109,9 @@ export function MobileTaskCard({
             />
           ) : (
             <p
-              className={cn("text-base font-medium leading-tight", !readOnly && "cursor-pointer")}
+              className={cn("text-base font-medium leading-tight", !structureLocked && "cursor-pointer")}
               onClick={() => {
-                if (!readOnly) {
+                if (!structureLocked) {
                   setNameValue(line.task_name || line.custom_text || "");
                   setEditingName(true);
                 }
@@ -111,6 +122,9 @@ export function MobileTaskCard({
           )}
           {line.assigned_trade && (
             <p className="text-xs text-muted-foreground mt-0.5">{line.assigned_trade}</p>
+          )}
+          {actualsOnly && (
+            <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5">Approved — actuals only</p>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -125,7 +139,7 @@ export function MobileTaskCard({
               readOnly={readOnly}
             />
           )}
-          {!readOnly && onDeleteLine && (
+          {!structureLocked && onDeleteLine && (
             <button
               onClick={() => onDeleteLine(line.id)}
               aria-label="Delete task"
@@ -142,20 +156,25 @@ export function MobileTaskCard({
           <button
             type="button"
             onClick={cycleStatus}
-            disabled={readOnly}
+            disabled={statusEditDisabled}
+            aria-label={`Status: ${info.label}. Tap to cycle.`}
+            title={actualsLocked ? "Approved — actuals only (no new cells)" : info.label}
             className={cn(
               "w-full flex items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm font-semibold min-h-12 touch-manipulation transition-all active:scale-[0.99]",
               info.tone,
               info.ring,
-              readOnly && "opacity-80"
+              statusEditDisabled && "opacity-80"
             )}
           >
             <StatusIcon className="h-5 w-5" strokeWidth={2.5} />
             <span>{info.label}</span>
           </button>
-          {!readOnly && (
+          {!readOnly && !actualsLocked && (
             <div className="grid grid-cols-5 gap-1">
-              {(["planned", "progress", "Y", "50", "N"] as DayStatus[]).map((s) => {
+              {((actualsOnly
+                ? (["Y", "N", "progress", "50"] as DayStatus[])
+                : (["Y", "N", "progress", "50", "planned"] as DayStatus[]))
+              ).map((s) => {
                 const meta = STATUS_INFO[s];
                 const Icon = meta.Icon;
                 const active = s === currentStatus;
@@ -223,7 +242,7 @@ export function MobileTaskCard({
         <div className="space-y-2 pt-1">
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Trade</label>
-            {readOnly ? (
+            {structureLocked ? (
               <p className="text-xs">{line.assigned_trade || "—"}</p>
             ) : (
               <input
@@ -236,7 +255,7 @@ export function MobileTaskCard({
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Notes</label>
-            {readOnly ? (
+            {structureLocked ? (
               <p className="text-xs">{line.notes || "—"}</p>
             ) : (
               <textarea
@@ -249,7 +268,7 @@ export function MobileTaskCard({
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Materials</label>
-            {readOnly ? (
+            {structureLocked ? (
               <p className="text-xs">{line.materials_needed || "—"}</p>
             ) : (
               <input
@@ -262,7 +281,7 @@ export function MobileTaskCard({
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Constraints</label>
-            {readOnly ? (
+            {structureLocked ? (
               <p className="text-xs">{line.constraints || "—"}</p>
             ) : (
               <textarea
