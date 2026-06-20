@@ -1367,7 +1367,7 @@ export default function LookAheadEditor() {
                       Working Week
                     </th>
                     <th className="w-2 min-w-[8px] bg-border/40"></th>
-                    <th colSpan={7} className="py-1 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-muted-foreground/20">
+                      <th colSpan={7} className="py-1 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-muted-foreground/20 bg-muted/30">
                       Planning Week
                     </th>
                     <th colSpan={3}></th>
@@ -1389,7 +1389,11 @@ export default function LookAheadEditor() {
                           <th
                             className={cn(
                               "py-1 px-0.5 text-center font-medium text-[10px] leading-tight min-w-[36px]",
-                              isWeekend && "bg-muted/80",
+                                // Planning week (days 7-13) gets a subtle tint
+                                // so it reads as visually separate from the
+                                // higher-emphasis Working Week.
+                                i >= 7 && !isToday && "bg-muted/40",
+                                isWeekend && "bg-muted/80",
                               isToday
                                 ? "bg-primary/15 text-primary border-x-2 border-t-2 border-primary/40 font-bold"
                                 : "text-muted-foreground"
