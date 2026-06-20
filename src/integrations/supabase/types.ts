@@ -38,6 +38,72 @@ export type Database = {
         }
         Relationships: []
       }
+      corrective_actions: {
+        Row: {
+          action: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          due_date: string | null
+          id: string
+          lookahead_line_id: string | null
+          owner_name: string | null
+          project_id: string
+          resolved_at: string | null
+          root_cause: string | null
+          status: string
+          updated_at: string
+          variance_reason: string | null
+        }
+        Insert: {
+          action: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          lookahead_line_id?: string | null
+          owner_name?: string | null
+          project_id: string
+          resolved_at?: string | null
+          root_cause?: string | null
+          status?: string
+          updated_at?: string
+          variance_reason?: string | null
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          lookahead_line_id?: string | null
+          owner_name?: string | null
+          project_id?: string
+          resolved_at?: string | null
+          root_cause?: string | null
+          status?: string
+          updated_at?: string
+          variance_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "corrective_actions_lookahead_line_id_fkey"
+            columns: ["lookahead_line_id"]
+            isOneToOne: false
+            referencedRelation: "lookahead_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "corrective_actions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       look_aheads: {
         Row: {
           company_id: string
