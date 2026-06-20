@@ -4,6 +4,8 @@ import { LookaheadLineData } from "./LookaheadRow";
 import { ChevronDown, ChevronRight, Trash2, Check, X, Circle, ArrowRight, Percent, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VarianceReasonPopover, VARIANCE_REASONS, getVarianceDotColor, VarianceReason } from "./VarianceReasonPopover";
+import { RowConstraintsPopover } from "./RowConstraintsPopover";
+import { ProjectConstraint } from "@/lib/constraints";
 
 interface MobileTaskCardProps {
   line: LookaheadLineData;
@@ -15,6 +17,10 @@ interface MobileTaskCardProps {
   onDeleteLine?: (lineId: string) => void;
   onNameChange?: (lineId: string, newName: string) => void;
   readOnly?: boolean;
+  projectId?: string;
+  linkedConstraints?: ProjectConstraint[];
+  projectOpenConstraints?: ProjectConstraint[];
+  onConstraintsChanged?: () => void;
 }
 
 const STATUS_CYCLE: DayStatus[] = ["", "planned", "progress", "Y", "N", "50"];
@@ -38,6 +44,10 @@ export function MobileTaskCard({
   onDeleteLine,
   onNameChange,
   readOnly,
+  projectId,
+  linkedConstraints,
+  projectOpenConstraints,
+  onConstraintsChanged,
 }: MobileTaskCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -104,6 +114,19 @@ export function MobileTaskCard({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {projectId && (
+            <div className="group/row">
+              <RowConstraintsPopover
+                projectId={projectId}
+                lookaheadLineId={line.id}
+                taskName={line.task_name || line.custom_text || "Untitled"}
+                linked={linkedConstraints || []}
+                projectOpen={projectOpenConstraints || []}
+                onChanged={() => onConstraintsChanged?.()}
+                readOnly={readOnly}
+              />
+            </div>
+          )}
           {!readOnly && onDeleteLine && (
             <button
               onClick={() => onDeleteLine(line.id)}
