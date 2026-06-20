@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { computePPC } from "@/lib/ppc";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 import { VARIANCE_REASONS, VarianceReasonPopover, getVarianceDotColor, VarianceReason } from "@/components/lookahead/VarianceReasonPopover";
+import { ProjectConstraint, typeLabel } from "@/lib/constraints";
 import { useToast } from "@/hooks/use-toast";
 
 type HuddleLine = {
@@ -45,6 +46,7 @@ export default function Huddle() {
   const [loading, setLoading] = useState(true);
   const [lines, setLines] = useState<HuddleLine[]>([]);
   const [variancePopoverId, setVariancePopoverId] = useState<string | null>(null);
+  const [openConstraintsByLine, setOpenConstraintsByLine] = useState<Record<string, ProjectConstraint[]>>({});
 
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -113,6 +115,23 @@ export default function Huddle() {
 
       if (!cancelled) {
         setLines(mapped);
+        // Fetch open project constraints linked to any of these lines
+        const lineIds = mapped.map((m) => m.id);
+        if (lineIds.length) {
+          const { data: pcs } = await supabase
+            .from("project_constraints")
+            .select("*")
+            .in("lookahead_line_id", lineIds)
+            .neq("status", "closed");
+          const grouped: Record<string, ProjectConstraint[]> = {};
+          for (const c of ((pcs as any) || []) as ProjectConstraint[]) {
+            if (!c.lookahead_line_id) continue;
+            (grouped[c.lookahead_line_id] ||= []).push(c);
+          }
+          setOpenConstraintsByLine(grouped);
+        } else {
+          setOpenConstraintsByLine({});
+        }
         setLoading(false);
       }
     })();
@@ -259,7 +278,20 @@ export default function Huddle() {
                   <div key={line.id} className="rounded-lg border bg-card p-3 space-y-2">
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm leading-tight">{line.task_name}</div>
+                        <div className="font-medium text-sm leading-tight flex items-center gap-1.5">
+                          {(openConstraintsByLine[line.id]?.length || 0) > 0 && (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                              title={openConstraintsByLine[line.id]
+                                .map((c) => `${typeLabel(c.type)}: ${c.description}`)
+                                .join("\n")}
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              {openConstraintsByLine[line.id].length}
+                            </span>
+                          )}
+                          <span className="truncate">{line.task_name}</span>
+                        </div>
                         <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-2">
                           {line.assigned_trade && <span>{line.assigned_trade}</span>}
                         </div>
