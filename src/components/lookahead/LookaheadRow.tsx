@@ -372,6 +372,8 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
                   onSelect={(reason, note) => {
                     onVarianceChange?.(line.id, reason, note || null);
                   }}
+                  projectId={projectId}
+                  lookaheadLineId={line.id}
                 >
                   <StatusDetailPopover
                     open={popoverLineId === cellKey}
