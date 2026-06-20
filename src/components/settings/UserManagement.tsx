@@ -584,20 +584,23 @@ export function UserManagement() {
                 <Input
                   type="email"
                   value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onChange={(e) => { setInviteEmail(e.target.value); if (inviteErrors.email) setInviteErrors({ ...inviteErrors, email: undefined }); }}
                   placeholder="user@example.com"
-                  className="pl-9"
+                  className={`pl-9 ${inviteErrors.email ? "border-destructive" : ""}`}
                 />
               </div>
+              {inviteErrors.email && <p className="text-xs text-destructive">{inviteErrors.email}</p>}
             </div>
             <div className="space-y-2">
               <Label>Password *</Label>
               <Input
                 type="password"
                 value={invitePassword}
-                onChange={(e) => setInvitePassword(e.target.value)}
+                onChange={(e) => { setInvitePassword(e.target.value); if (inviteErrors.password) setInviteErrors({ ...inviteErrors, password: undefined }); }}
                 placeholder="Minimum 6 characters"
+                className={inviteErrors.password ? "border-destructive" : ""}
               />
+              {inviteErrors.password && <p className="text-xs text-destructive">{inviteErrors.password}</p>}
             </div>
             <div className="space-y-2">
               <Label>Display Name</Label>
