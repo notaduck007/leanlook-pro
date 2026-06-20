@@ -26,7 +26,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Users, Search, MoreHorizontal, Shield, ShieldCheck, HardHat,
-  Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Mail, Loader2,
+  Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Mail, Loader2, KeyRound,
 } from "lucide-react";
 
 type AppRole = "admin" | "pm" | "super";
@@ -66,6 +66,13 @@ export function UserManagement() {
   // Remove confirmation
   const [removeUser, setRemoveUser] = useState<CompanyUser | null>(null);
   const [removing, setRemoving] = useState(false);
+
+  // Reset password
+  const [resetUser, setResetUser] = useState<CompanyUser | null>(null);
+  const [resetMode, setResetMode] = useState<"set_password" | "send_reset_email">("send_reset_email");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -295,6 +302,65 @@ export function UserManagement() {
     }
   };
 
+  // --- Reset password (admin → same-company user) ---
+  const openReset = (u: CompanyUser) => {
+    setResetUser(u);
+    setResetMode("send_reset_email");
+    setResetPassword("");
+    setResetConfirm("");
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetUser) return;
+    if (resetMode === "set_password") {
+      if (resetPassword.length < 8) {
+        toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+        return;
+      }
+      if (resetPassword !== resetConfirm) {
+        toast({ title: "Passwords do not match", variant: "destructive" });
+        return;
+      }
+    }
+    setResetting(true);
+    try {
+      const res = await supabase.functions.invoke("admin-reset-password", {
+        body: {
+          target_user_id: resetUser.user_id,
+          action: resetMode,
+          password: resetMode === "set_password" ? resetPassword : undefined,
+          redirect_to:
+            resetMode === "send_reset_email"
+              ? `${window.location.origin}/reset-password`
+              : undefined,
+        },
+      });
+      if (res.error || res.data?.error) {
+        toast({
+          title: "Reset failed",
+          description: res.data?.error || res.error?.message || "Unknown error",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title:
+            resetMode === "set_password"
+              ? "Temporary password set"
+              : "Reset email sent",
+          description:
+            resetMode === "set_password"
+              ? `${resetUser.display_name || "User"} will be prompted to choose a new password on next sign-in.`
+              : `A password reset email was sent to ${res.data?.email || "the user"}.`,
+        });
+        setResetUser(null);
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <Card>
@@ -447,6 +513,9 @@ export function UserManagement() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEdit(u)}>
                                 <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openReset(u)}>
+                                <KeyRound className="h-3.5 w-3.5 mr-2" /> Reset Password
                               </DropdownMenuItem>
                               {!isMe && (
                                 <DropdownMenuItem
@@ -654,6 +723,79 @@ export function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetUser} onOpenChange={(o) => !o && setResetUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" /> Reset Password
+            </DialogTitle>
+            <DialogDescription>
+              Choose how to reset the password for{" "}
+              <strong>{resetUser?.display_name || "this user"}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Method</Label>
+              <Select
+                value={resetMode}
+                onValueChange={(v) => setResetMode(v as typeof resetMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="send_reset_email">Send reset email</SelectItem>
+                  <SelectItem value="set_password">Set temporary password</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {resetMode === "set_password" ? (
+              <>
+                <div className="space-y-2">
+                  <Label>New temporary password</Label>
+                  <Input
+                    type="password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Confirm password</Label>
+                  <Input
+                    type="password"
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                    placeholder="Re-enter password"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The user will be required to choose a new password the next time they sign in.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                A password reset email will be sent to the user's address with a secure link.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetUser(null)} disabled={resetting}>
+              Cancel
+            </Button>
+            <Button onClick={handleResetPassword} disabled={resetting}>
+              {resetting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {resetMode === "set_password" ? "Set Password" : "Send Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
