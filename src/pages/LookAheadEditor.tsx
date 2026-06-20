@@ -1130,6 +1130,9 @@ export default function LookAheadEditor() {
                       setGeneratingPDF(true);
                       try {
                         await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                        toast({ title: "PDF exported", description: "Your look-ahead PDF has been downloaded." });
+                      } catch (e: any) {
+                        toast({ title: "Export failed", description: e?.message || "Could not generate PDF.", variant: "destructive" });
                       } finally {
                         setGeneratingPDF(false);
                       }
@@ -1145,6 +1148,9 @@ export default function LookAheadEditor() {
               setGeneratingPDF(true);
               try {
                 await generateLookaheadPDF(project?.name || "", lookAhead?.week_start_date || "", profile?.display_name || "Superintendent", lines, dates);
+                toast({ title: "PDF exported", description: "Your look-ahead PDF has been downloaded." });
+              } catch (e: any) {
+                toast({ title: "Export failed", description: e?.message || "Could not generate PDF.", variant: "destructive" });
               } finally {
                 setGeneratingPDF(false);
               }
