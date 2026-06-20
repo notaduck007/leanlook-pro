@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock, Trash2, Download, Pencil, MoreVertical } from "lucide-react";
+import { ArrowLeft, Upload, FileText, CalendarDays, Loader2, Eye, Clock, Trash2, Download, Pencil, MoreVertical, AlertTriangle, Building2, MapPin, Hash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
@@ -31,6 +31,7 @@ export default function ProjectDetail() {
   const [editingVersion, setEditingVersion] = useState<any>(null);
   const [editVersionNumber, setEditVersionNumber] = useState("");
   const [deleteVersionId, setDeleteVersionId] = useState<string | null>(null);
+  const [datesMissingWarning, setDatesMissingWarning] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -104,7 +105,18 @@ export default function ProjectDetail() {
         },
       });
       if (fnError) throw fnError;
-      toast({ title: "Schedule parsed!", description: `${fnData?.task_count || 0} tasks loaded successfully.` });
+      const count = fnData?.task_count || 0;
+      if (fnData?.dates_missing && count > 0) {
+        setDatesMissingWarning(true);
+        toast({
+          title: "Schedule parsed, but no dates detected",
+          description: `${count} tasks loaded with no start/finish dates. Look-aheads can't auto-populate until dates are added.`,
+          variant: "destructive",
+        });
+      } else {
+        setDatesMissingWarning(false);
+        toast({ title: "Schedule parsed!", description: `${count} tasks loaded successfully.` });
+      }
     } catch {
       toast({ title: "Parsing notice", description: "Schedule uploaded. AI parsing will be available once the edge function is deployed." });
     }
@@ -170,9 +182,52 @@ export default function ProjectDetail() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold">{project.name}</h1>
-          <p className="text-sm text-muted-foreground capitalize">{project.status}</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-0.5">
+            <span className="capitalize">{project.status}</span>
+            {project.project_number && (
+              <span className="inline-flex items-center gap-1">
+                <Hash className="h-3.5 w-3.5" /> {project.project_number}
+              </span>
+            )}
+            {project.client && (
+              <span className="inline-flex items-center gap-1">
+                <Building2 className="h-3.5 w-3.5" /> {project.client}
+              </span>
+            )}
+            {project.location && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5" /> {project.location}
+              </span>
+            )}
+            {(project.start_date || project.target_completion_date) && (
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3.5 w-3.5" />
+                {project.start_date ? format(new Date(project.start_date + "T00:00:00"), "MMM d, yyyy") : "—"}
+                {" → "}
+                {project.target_completion_date ? format(new Date(project.target_completion_date + "T00:00:00"), "MMM d, yyyy") : "—"}
+              </span>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Dateless schedule warning */}
+      {datesMissingWarning && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              Schedule parsed but no task dates were detected.
+            </p>
+            <p className="text-amber-800/90 dark:text-amber-300/90 mt-0.5">
+              Look-aheads can't auto-populate from this schedule. Check that the source file includes start and finish dates, then re-upload.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" className="ml-auto h-7 text-amber-900 dark:text-amber-200" onClick={() => setDatesMissingWarning(false)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {/* Lean Tracking Analytics */}
       {id && (
