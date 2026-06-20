@@ -1034,6 +1034,11 @@ export default function LookAheadEditor() {
   // Today's date string for column highlighting
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
+  // Mobile day selector — default to today if it's in range, else the first day
+  const effectiveMobileDate = selectedMobileDate
+    ? (dates.includes(selectedMobileDate) ? selectedMobileDate : dates[0])
+    : (dates.includes(todayStr) ? todayStr : dates[0]);
+
   const existingTaskIds = new Set(lines.filter((l) => l.task_id).map((l) => l.task_id));
 
   // Keep refs in sync for keyboard navigation (flatten for nav)
