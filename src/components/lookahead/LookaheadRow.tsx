@@ -26,6 +26,8 @@ import { MasterAutocomplete, AutocompleteItem } from "@/components/shared/Master
 import { MasterTaskRecord } from "@/hooks/useMasterTasks";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { RowConstraintsPopover } from "./RowConstraintsPopover";
+import { ProjectConstraint } from "@/lib/constraints";
 
 export interface CarryOverDataInfo {
   previous_lookahead_id?: string;
@@ -85,9 +87,13 @@ interface LookaheadRowProps {
   showHidden?: boolean;
   variancePopoverLineDate?: string | null;
   onVariancePopoverChange?: (lineDateKey: string | null) => void;
+  projectId?: string;
+  linkedConstraintsByLine?: Record<string, ProjectConstraint[]>;
+  projectOpenConstraints?: ProjectConstraint[];
+  onConstraintsChanged?: () => void;
 }
 
-export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, onVarianceChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden, variancePopoverLineDate, onVariancePopoverChange }: LookaheadRowProps) {
+export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldChange, onDeleteLine, onNameChange, onAddSubtask, onToggleHidden, onPercentChange, onExpectedDateChange, onVarianceChange, readOnly, onRegisterRef, onNavigate, masterTasks = [], showHidden, variancePopoverLineDate, onVariancePopoverChange, projectId, linkedConstraintsByLine, projectOpenConstraints, onConstraintsChanged }: LookaheadRowProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [popoverLineId, setPopoverLineId] = useState<string | null>(null);
   const depth = line.depth || 0;
@@ -283,6 +289,17 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
               >
                 <Plus className="h-3 w-3" />
               </button>
+            )}
+            {projectId && (
+              <RowConstraintsPopover
+                projectId={projectId}
+                lookaheadLineId={line.id}
+                taskName={line.task_name || line.custom_text || "Untitled"}
+                linked={linkedConstraintsByLine?.[line.id] || []}
+                projectOpen={projectOpenConstraints || []}
+                onChanged={() => onConstraintsChanged?.()}
+                readOnly={readOnly}
+              />
             )}
           </div>
         </td>
@@ -506,6 +523,10 @@ export function LookaheadRow({ line, dates, todayStr, onStatusChange, onFieldCha
           showHidden={showHidden}
           variancePopoverLineDate={variancePopoverLineDate}
           onVariancePopoverChange={onVariancePopoverChange}
+          projectId={projectId}
+          linkedConstraintsByLine={linkedConstraintsByLine}
+          projectOpenConstraints={projectOpenConstraints}
+          onConstraintsChanged={onConstraintsChanged}
         />
       ))}
     </>
