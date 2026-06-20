@@ -18,10 +18,12 @@ interface ConstraintDialogProps {
   constraint?: ProjectConstraint | null;
   /** Prefill a lookahead_line_id when creating */
   defaultLookaheadLineId?: string | null;
+  /** Prefill a task_id when creating (master-schedule task linkage) */
+  defaultTaskId?: string | null;
   onSaved?: () => void;
 }
 
-export function ConstraintDialog({ open, onOpenChange, projectId, constraint, defaultLookaheadLineId, onSaved }: ConstraintDialogProps) {
+export function ConstraintDialog({ open, onOpenChange, projectId, constraint, defaultLookaheadLineId, defaultTaskId, onSaved }: ConstraintDialogProps) {
   const { profile, user } = useAuth();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -83,6 +85,7 @@ export function ConstraintDialog({ open, onOpenChange, projectId, constraint, de
         status,
         created_by: user?.id || null,
         lookahead_line_id: defaultLookaheadLineId || null,
+        task_id: defaultTaskId || null,
       });
       if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
       else toast({ title: "Constraint added" });
