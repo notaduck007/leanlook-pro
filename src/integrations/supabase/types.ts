@@ -361,26 +361,53 @@ export type Database = {
       project_constraints: {
         Row: {
           company_id: string
+          created_at: string
+          created_by: string | null
           description: string
           id: string
+          lookahead_line_id: string | null
+          need_by_date: string | null
+          owner_name: string | null
+          owner_user_id: string | null
           project_id: string
-          rank: number
+          rank: number | null
+          resolved_at: string | null
+          status: string
+          type: string
           updated_at: string
         }
         Insert: {
           company_id: string
+          created_at?: string
+          created_by?: string | null
           description?: string
           id?: string
+          lookahead_line_id?: string | null
+          need_by_date?: string | null
+          owner_name?: string | null
+          owner_user_id?: string | null
           project_id: string
-          rank: number
+          rank?: number | null
+          resolved_at?: string | null
+          status?: string
+          type?: string
           updated_at?: string
         }
         Update: {
           company_id?: string
+          created_at?: string
+          created_by?: string | null
           description?: string
           id?: string
+          lookahead_line_id?: string | null
+          need_by_date?: string | null
+          owner_name?: string | null
+          owner_user_id?: string | null
           project_id?: string
-          rank?: number
+          rank?: number | null
+          resolved_at?: string | null
+          status?: string
+          type?: string
           updated_at?: string
         }
         Relationships: [
@@ -389,6 +416,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_constraints_lookahead_line_id_fkey"
+            columns: ["lookahead_line_id"]
+            isOneToOne: false
+            referencedRelation: "lookahead_lines"
             referencedColumns: ["id"]
           },
           {
