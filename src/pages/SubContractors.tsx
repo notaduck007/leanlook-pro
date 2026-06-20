@@ -10,7 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from "@/components/ui/sheet";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -78,6 +78,7 @@ export default function SubContractors() {
   const [statusFilter, setStatusFilter] = useState<SubStatus | "all">("all");
   const [page, setPage] = useState(0);
   const pageSize = 25;
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const companyId = profile?.company_id;
 
@@ -135,12 +136,18 @@ export default function SubContractors() {
   };
 
   const openAdd = () => { setEditingSub(null); setForm({ ...emptyForm }); setSheetOpen(true); };
-  const openEdit = (sub: Subcontractor) => { setEditingSub(sub); setForm({ ...sub }); setSheetOpen(true); };
+  const openEdit = (sub: Subcontractor) => { setEditingSub(sub); setForm({ ...sub }); setErrors({}); setSheetOpen(true); };
 
   const handleSave = async () => {
     if (!companyId) return;
-    if (!form.company_name?.trim() || !form.trade?.trim() || !form.contact_name?.trim() || !form.phone?.trim()) {
-      toast({ title: "Please fill all required fields", variant: "destructive" });
+    const errs: Record<string, string> = {};
+    if (!form.company_name?.trim()) errs.company_name = "Company name is required";
+    if (!form.trade?.trim()) errs.trade = "Trade is required";
+    if (!form.contact_name?.trim()) errs.contact_name = "Contact name is required";
+    if (!form.phone?.trim()) errs.phone = "Phone is required";
+    setErrors(errs);
+    if (Object.keys(errs).length) {
+      toast({ title: "Please fix the highlighted fields", variant: "destructive" });
       return;
     }
     setSaving(true);
