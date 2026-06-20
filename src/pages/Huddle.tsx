@@ -278,7 +278,20 @@ export default function Huddle() {
                   <div key={line.id} className="rounded-lg border bg-card p-3 space-y-2">
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm leading-tight">{line.task_name}</div>
+                        <div className="font-medium text-sm leading-tight flex items-center gap-1.5">
+                          {(openConstraintsByLine[line.id]?.length || 0) > 0 && (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                              title={openConstraintsByLine[line.id]
+                                .map((c) => `${typeLabel(c.type)}: ${c.description}`)
+                                .join("\n")}
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              {openConstraintsByLine[line.id].length}
+                            </span>
+                          )}
+                          <span className="truncate">{line.task_name}</span>
+                        </div>
                         <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-2">
                           {line.assigned_trade && <span>{line.assigned_trade}</span>}
                         </div>
