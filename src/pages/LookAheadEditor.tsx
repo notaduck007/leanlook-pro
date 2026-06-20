@@ -984,14 +984,25 @@ export default function LookAheadEditor() {
     }
     if (!filter) return result;
     const lowerFilter = filter.toLowerCase();
-    return result.filter(
-      (l) =>
-        l.task_name.toLowerCase().includes(lowerFilter) ||
-        (l.assigned_trade || "").toLowerCase().includes(lowerFilter) ||
-        (l.children || []).some(
-          (c) => c.task_name.toLowerCase().includes(lowerFilter)
-        )
-    );
+    const rowMatches = (name: string, trade: string | null | undefined) =>
+      name.toLowerCase().includes(lowerFilter) ||
+      (trade || "").toLowerCase().includes(lowerFilter);
+    // Only keep rows that themselves match. If a parent row matches, keep
+    // its (still-non-hidden) children too. If only a subtask matches, keep
+    // its parent for context but drop all the non-matching siblings.
+    const out: typeof result = [];
+    for (const parent of result) {
+      const parentHit = rowMatches(parent.task_name, parent.assigned_trade);
+      const matchedChildren = (parent.children || []).filter((c) =>
+        rowMatches(c.task_name, c.assigned_trade)
+      );
+      if (parentHit) {
+        out.push({ ...parent, children: parent.children || [] });
+      } else if (matchedChildren.length > 0) {
+        out.push({ ...parent, children: matchedChildren });
+      }
+    }
+    return out;
   }, [hierarchicalLines, filter, showHidden]);
 
   const sortableIds = useMemo(() =>
