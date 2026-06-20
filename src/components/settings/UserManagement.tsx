@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -324,7 +325,7 @@ export function UserManagement() {
     }
     setResetting(true);
     try {
-      const res = await supabase.functions.invoke("admin-reset-password", {
+      const { data, error } = await supabase.functions.invoke("admin-reset-password", {
         body: {
           target_user_id: resetUser.user_id,
           action: resetMode,
@@ -335,10 +336,26 @@ export function UserManagement() {
               : undefined,
         },
       });
-      if (res.error || res.data?.error) {
+
+      let errMsg: string | null = null;
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const body = await error.context.json();
+            errMsg = body?.error ?? null;
+          } catch {
+            try { errMsg = await error.context.text(); } catch {}
+          }
+        }
+        errMsg = errMsg ?? error.message;
+      } else if (data?.error) {
+        errMsg = data.error;
+      }
+
+      if (errMsg) {
         toast({
           title: "Reset failed",
-          description: res.data?.error || res.error?.message || "Unknown error",
+          description: errMsg,
           variant: "destructive",
         });
       } else {
@@ -350,7 +367,7 @@ export function UserManagement() {
           description:
             resetMode === "set_password"
               ? `${resetUser.display_name || "User"} will be prompted to choose a new password on next sign-in.`
-              : `A password reset email was sent to ${res.data?.email || "the user"}.`,
+              : `A password reset email was sent to ${data?.email || "the user"}.`,
         });
         setResetUser(null);
       }
