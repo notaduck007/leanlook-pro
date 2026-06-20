@@ -17,6 +17,7 @@ import { DayStatus } from "@/components/lookahead/StatusCell";
 import { generateLookaheadPDF } from "@/components/lookahead/LookaheadPDF";
 import { PullTasksDialog } from "@/components/lookahead/PullTasksDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { computePPC } from "@/lib/ppc";
 
 import { useMasterTasks } from "@/hooks/useMasterTasks";
 import {
