@@ -287,7 +287,7 @@ export default function Huddle() {
             <Stat label="Committed" value={todaysLines.length} />
             <Stat label="Complete" value={todaysLines.filter((l) => l.status_per_day[dateStr] === "Y").length} tone="text-emerald-600 dark:text-emerald-400" />
             <Stat label="Not Done" value={notDone.length} tone="text-red-600 dark:text-red-400" />
-            <Stat label="Open Constraints" value={openConstraints.length} tone="text-amber-600 dark:text-amber-400" />
+            <Stat label="Open Constraints" value={openConstraintsList.length} tone="text-amber-600 dark:text-amber-400" />
           </div>
         </CardContent>
       </Card>
@@ -351,6 +351,7 @@ export default function Huddle() {
                     <button
                       type="button"
                       onClick={() => cycleStatus(line)}
+                      aria-label={`Status: ${info.label}. Tap to cycle.`}
                       className={cn(
                         "w-full flex items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm font-semibold min-h-12 touch-manipulation transition-all active:scale-[0.99]",
                         info.tone, info.ring
@@ -359,8 +360,16 @@ export default function Huddle() {
                       <StatusIcon className="h-5 w-5" strokeWidth={2.5} />
                       <span>{info.label}</span>
                     </button>
+                    {(line.parent_status === "approved" || line.parent_status === "rejected") && (
+                      <p className="text-[10px] text-amber-700 dark:text-amber-300 -mt-1">
+                        Approved — actuals only
+                      </p>
+                    )}
                     <div className="grid grid-cols-5 gap-1">
-                      {(["planned", "progress", "Y", "50", "N"] as DayStatus[]).map((s) => {
+                      {(((line.parent_status === "approved" || line.parent_status === "rejected")
+                          ? (["Y", "N", "progress", "50"] as DayStatus[])
+                          : (["Y", "N", "progress", "50", "planned"] as DayStatus[]))
+                      ).map((s) => {
                         const meta = STATUS_INFO[s];
                         const Icon = meta.Icon;
                         const active = s === status;
