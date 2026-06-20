@@ -81,6 +81,7 @@ export function UserManagement() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [invitePassword, setInvitePassword] = useState("");
+  const [inviteErrors, setInviteErrors] = useState<{ email?: string; password?: string }>({});
   const [inviteRole, setInviteRole] = useState<AppRole>("super");
   const [inviteCompanyId, setInviteCompanyId] = useState("");
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
@@ -173,14 +174,16 @@ export function UserManagement() {
 
   // --- Invite user ---
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
-    if (!invitePassword.trim()) {
-      toast({ title: "Password is required", variant: "destructive" });
-      return;
+    const errs: { email?: string; password?: string } = {};
+    if (!inviteEmail.trim()) errs.email = "Email is required";
+    if (!invitePassword.trim()) errs.password = "Password is required";
+    else {
+      const pwErr = validatePassword(invitePassword);
+      if (pwErr) errs.password = pwErr;
     }
-    const inviteErr = validatePassword(invitePassword);
-    if (inviteErr) {
-      toast({ title: inviteErr, variant: "destructive" });
+    setInviteErrors(errs);
+    if (Object.keys(errs).length) {
+      toast({ title: "Please fix the highlighted fields", variant: "destructive" });
       return;
     }
     setInviting(true);
