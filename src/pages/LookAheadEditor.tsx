@@ -459,6 +459,20 @@ export default function LookAheadEditor() {
     setLookAhead((prev: any) => ({ ...prev, status: "rejected" }));
   };
 
+  const handleReopen = async () => {
+    if (!lookaheadId) return;
+    const { error } = await supabase
+      .from("look_aheads")
+      .update({ status: "draft", updated_at: new Date().toISOString() } as any)
+      .eq("id", lookaheadId);
+    if (error) {
+      toast({ title: "Could not reopen", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Look-ahead reopened — now editable as draft." });
+    setLookAhead((prev: any) => ({ ...prev, status: "draft" }));
+  };
+
   const handleAddCustomLine = async () => {
     if (!lookaheadId || !profile?.company_id) return;
     const { data } = await supabase
