@@ -796,7 +796,7 @@ export function UserManagement() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  The user will be required to choose a new password the next time they sign in.
+                  {PASSWORD_RULE_TEXT} The user will be required to choose a new password the next time they sign in.
                 </p>
               </>
             ) : (
