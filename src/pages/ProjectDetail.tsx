@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LeanTrackingAnalytics } from "@/components/project/LeanTrackingAnalytics";
 import { ConstraintsLog, ConstraintsSummary } from "@/components/project/ConstraintsLog";
+import { MakeReadyView } from "@/components/project/MakeReadyView";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -248,6 +249,9 @@ export default function ProjectDetail() {
 
       {/* Constraints Log */}
       {id && <ConstraintsLog projectId={id} />}
+
+      {/* Make-Ready Look-Ahead (rolling 3-6 weeks) */}
+      {id && <MakeReadyView projectId={id} />}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Upload */}
