@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { computePPC } from "@/lib/ppc";
 import { DayStatus } from "@/components/lookahead/StatusCell";
 import { VARIANCE_REASONS, VarianceReasonPopover, getVarianceDotColor, VarianceReason } from "@/components/lookahead/VarianceReasonPopover";
+import { ProjectConstraint, needByUrgency, typeLabel } from "@/lib/constraints";
 import { useToast } from "@/hooks/use-toast";
 
 type HuddleLine = {
@@ -45,6 +46,7 @@ export default function Huddle() {
   const [loading, setLoading] = useState(true);
   const [lines, setLines] = useState<HuddleLine[]>([]);
   const [variancePopoverId, setVariancePopoverId] = useState<string | null>(null);
+  const [openConstraintsByLine, setOpenConstraintsByLine] = useState<Record<string, ProjectConstraint[]>>({});
 
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -113,6 +115,23 @@ export default function Huddle() {
 
       if (!cancelled) {
         setLines(mapped);
+        // Fetch open project constraints linked to any of these lines
+        const lineIds = mapped.map((m) => m.id);
+        if (lineIds.length) {
+          const { data: pcs } = await supabase
+            .from("project_constraints")
+            .select("*")
+            .in("lookahead_line_id", lineIds)
+            .neq("status", "closed");
+          const grouped: Record<string, ProjectConstraint[]> = {};
+          for (const c of ((pcs as any) || []) as ProjectConstraint[]) {
+            if (!c.lookahead_line_id) continue;
+            (grouped[c.lookahead_line_id] ||= []).push(c);
+          }
+          setOpenConstraintsByLine(grouped);
+        } else {
+          setOpenConstraintsByLine({});
+        }
         setLoading(false);
       }
     })();
