@@ -435,7 +435,7 @@ export default function Huddle() {
       )}
 
       {/* Blockers & Not-Done summary */}
-      {(notDone.length > 0 || openConstraints.length > 0) && (
+      {(notDone.length > 0 || openConstraintsList.length > 0) && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -466,16 +466,18 @@ export default function Huddle() {
                 </ul>
               </div>
             )}
-            {openConstraints.length > 0 && (
+            {openConstraintsList.length > 0 && (
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Open constraints</div>
                 <ul className="space-y-1">
-                  {openConstraints.map((l) => (
-                    <li key={l.id} className="text-sm flex items-start gap-2">
-                      <Badge variant="outline" className="text-[10px]">{l.project_name}</Badge>
+                  {openConstraintsList.map(({ constraint, line }) => (
+                    <li key={constraint.id} className="text-sm flex items-start gap-2">
+                      <Badge variant="outline" className="text-[10px]">{line.project_name}</Badge>
                       <span className="flex-1">
-                        <span className="font-medium">{l.task_name}</span>
-                        <span className="text-xs text-muted-foreground block">{l.constraints}</span>
+                        <span className="font-medium">{line.task_name}</span>
+                        <span className="text-xs text-muted-foreground block">
+                          {typeLabel(constraint.type)}: {constraint.description}
+                        </span>
                       </span>
                     </li>
                   ))}
