@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { HardHat, Eye, EyeOff } from "lucide-react";
+import { validatePassword } from "@/lib/password";
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -32,6 +33,12 @@ export default function Auth() {
         setForgotPassword(false);
       }
     } else if (isSignUp) {
+      const pwErr = validatePassword(password);
+      if (pwErr) {
+        toast({ title: "Error", description: pwErr, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,

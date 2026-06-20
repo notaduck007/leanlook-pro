@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { validatePassword, PASSWORD_RULE_TEXT } from "@/lib/password";
 import { HardHat, Eye, EyeOff } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 
@@ -26,8 +27,9 @@ export default function ChangePassword() {
       toast({ title: "Passwords do not match", variant: "destructive" });
       return;
     }
-    if (password.length < 8) {
-      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+    const pwErr = validatePassword(password);
+    if (pwErr) {
+      toast({ title: pwErr, variant: "destructive" });
       return;
     }
     setLoading(true);

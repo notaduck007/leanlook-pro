@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { validatePassword, PASSWORD_RULE_TEXT } from "@/lib/password";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -177,8 +178,9 @@ export function UserManagement() {
       toast({ title: "Password is required", variant: "destructive" });
       return;
     }
-    if (invitePassword.length < 6) {
-      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+    const inviteErr = validatePassword(invitePassword);
+    if (inviteErr) {
+      toast({ title: inviteErr, variant: "destructive" });
       return;
     }
     setInviting(true);
@@ -314,8 +316,9 @@ export function UserManagement() {
   const handleResetPassword = async () => {
     if (!resetUser) return;
     if (resetMode === "set_password") {
-      if (resetPassword.length < 8) {
-        toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+      const pwErr = validatePassword(resetPassword);
+      if (pwErr) {
+        toast({ title: pwErr, variant: "destructive" });
         return;
       }
       if (resetPassword !== resetConfirm) {

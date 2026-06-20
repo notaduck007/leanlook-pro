@@ -78,9 +78,13 @@ Deno.serve(async (req) => {
     if (!targetEmail) return json({ error: "Target user has no email" }, 400);
 
     if (action === "set_password") {
-      if (!password || typeof password !== "string" || password.length < 8) {
-        return json({ error: "Password must be at least 8 characters" }, 400);
+      if (!password || typeof password !== "string") {
+        return json({ error: "Password is required" }, 400);
       }
+      if (password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+      if (!/[A-Z]/.test(password)) return json({ error: "Password must include an uppercase letter." }, 400);
+      if (!/[a-z]/.test(password)) return json({ error: "Password must include a lowercase letter." }, 400);
+      if (!/[^A-Za-z0-9]/.test(password)) return json({ error: "Password must include a special character." }, 400);
       const existingMeta = targetData.user.user_metadata || {};
       const { error: updErr } = await admin.auth.admin.updateUserById(target_user_id, {
         password,
