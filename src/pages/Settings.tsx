@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings as SettingsIcon, Users, Palette, Tag, Bell } from "lucide-react";
 
 export default function Settings() {
-  const { profile, roles } = useAuth();
+  const { profile, roles, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isAdmin = roles.includes("admin");
 
@@ -53,6 +53,10 @@ export default function Settings() {
               <div>
                 <p className="text-sm text-muted-foreground">Display Name</p>
                 <p className="font-medium">{profile?.display_name || "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Email</p>
+                <p className="font-medium">{user?.email || "—"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Roles</p>
