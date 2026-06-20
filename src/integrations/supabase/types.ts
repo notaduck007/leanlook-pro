@@ -402,30 +402,45 @@ export type Database = {
       }
       projects: {
         Row: {
+          client: string | null
           company_id: string
           created_at: string
           id: string
+          location: string | null
           name: string
           ppc_goal: number
+          project_number: string | null
+          start_date: string | null
           status: Database["public"]["Enums"]["project_status"]
+          target_completion_date: string | null
           updated_at: string
         }
         Insert: {
+          client?: string | null
           company_id: string
           created_at?: string
           id?: string
+          location?: string | null
           name: string
           ppc_goal?: number
+          project_number?: string | null
+          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
+          target_completion_date?: string | null
           updated_at?: string
         }
         Update: {
+          client?: string | null
           company_id?: string
           created_at?: string
           id?: string
+          location?: string | null
           name?: string
           ppc_goal?: number
+          project_number?: string | null
+          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
+          target_completion_date?: string | null
           updated_at?: string
         }
         Relationships: [

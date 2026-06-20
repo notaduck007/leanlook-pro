@@ -12,6 +12,11 @@ import { ArrowLeft } from "lucide-react";
 export default function NewProject() {
   const { profile } = useAuth();
   const [name, setName] = useState("");
+  const [projectNumber, setProjectNumber] = useState("");
+  const [client, setClient] = useState("");
+  const [location, setLocation] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [targetCompletionDate, setTargetCompletionDate] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -23,7 +28,15 @@ export default function NewProject() {
 
     const { data, error } = await supabase
       .from("projects")
-      .insert({ name, company_id: profile.company_id })
+      .insert({
+        name,
+        company_id: profile.company_id,
+        project_number: projectNumber.trim() || null,
+        client: client.trim() || null,
+        location: location.trim() || null,
+        start_date: startDate || null,
+        target_completion_date: targetCompletionDate || null,
+      } as any)
       .select()
       .single();
 
@@ -48,7 +61,9 @@ export default function NewProject() {
         <CardContent>
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-1">
-              <Label htmlFor="projectName">Project name</Label>
+              <Label htmlFor="projectName">
+                Project name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="projectName"
                 placeholder="Project name"
@@ -56,6 +71,55 @@ export default function NewProject() {
                 onChange={(e) => setName(e.target.value)}
                 required
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="projectNumber">Project number</Label>
+                <Input
+                  id="projectNumber"
+                  placeholder="e.g. 2026-014"
+                  value={projectNumber}
+                  onChange={(e) => setProjectNumber(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="client">Client / Owner</Label>
+                <Input
+                  id="client"
+                  placeholder="e.g. Conroe ISD"
+                  value={client}
+                  onChange={(e) => setClient(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="location">Location / Address</Label>
+              <Input
+                id="location"
+                placeholder="Street, city, state"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="startDate">Start date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="targetCompletionDate">Target completion</Label>
+                <Input
+                  id="targetCompletionDate"
+                  type="date"
+                  value={targetCompletionDate}
+                  onChange={(e) => setTargetCompletionDate(e.target.value)}
+                />
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating..." : "Create Project"}
