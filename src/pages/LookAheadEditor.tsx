@@ -1557,6 +1557,10 @@ export default function LookAheadEditor() {
                           showHidden={showHidden}
                           variancePopoverLineDate={variancePopoverKey}
                           onVariancePopoverChange={setVariancePopoverKey}
+                          projectId={projectId}
+                          linkedConstraintsByLine={linkedConstraintsByLine}
+                          projectOpenConstraints={projectConstraints}
+                          onConstraintsChanged={fetchProjectConstraints}
                         />
                       ))}
                     </SortableContext>
