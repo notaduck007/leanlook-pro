@@ -28,11 +28,29 @@ function statusColors(s: DayStatus): { fill: [number, number, number]; text: [nu
   }
 }
 
+const VARIANCE_LABELS: Record<string, string> = {
+  make_ready: "Make Ready",
+  manpower: "Manpower",
+  material_equipment: "Material/Equipment",
+  design: "Design",
+  weather: "Weather",
+  ahj: "AHJ",
+  other: "Other",
+};
+
+function formatRootCause(reason?: string | null, note?: string | null): string {
+  const label = reason ? (VARIANCE_LABELS[reason] || reason) : "";
+  if (label && note) return `${label}: ${note}`;
+  return label || note || "";
+}
+
 interface PDFRow {
   task: string;
   trade: string;
   notes: string;
   materials: string;
+  rootCause: string;
+  constraints: string;
   isParent: boolean;
   isSubtask: boolean;
   [dateKey: string]: string | boolean;
@@ -66,6 +84,8 @@ function buildHierarchicalRows(
       trade: parent.assigned_trade || "",
       notes: parent.notes || "",
       materials: parent.materials_needed || "",
+      rootCause: formatRootCause(parent.variance_reason, parent.variance_note),
+      constraints: parent.constraints || "",
       isParent: childrenByParent.has(parent.id),
       isSubtask: false,
     };
@@ -86,6 +106,8 @@ function buildHierarchicalRows(
         trade: child.assigned_trade || "",
         notes: child.notes || "",
         materials: child.materials_needed || "",
+        rootCause: formatRootCause(child.variance_reason, child.variance_note),
+        constraints: child.constraints || "",
         isParent: false,
         isSubtask: true,
       };
@@ -161,38 +183,51 @@ export async function generateLookaheadPDF(
       }),
       { header: "Notes", dataKey: "notes" },
       { header: "Materials", dataKey: "materials" },
+      { header: "Root Cause", dataKey: "rootCause" },
+      { header: "Constraints", dataKey: "constraints" },
     ];
 
     // Auto-fit: choose widths so fixed + dates exactly fill the page width.
     const margins = 80;
     const usable = pageWidth - margins;
     const numDates = chunkDates.length || 1;
-    // Target proportions; tuned to keep day cells readable and Task wide enough.
-    let taskColWidth = 170;
-    let tradeColWidth = 70;
-    let notesColWidth = 110;
-    let materialsColWidth = 90;
-    let fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
+    // Target proportions; tuned to fit Task, Trade, Notes, Materials, Root
+    // Cause, and Constraints alongside 7 day cells on landscape letter.
+    let taskColWidth = 140;
+    let tradeColWidth = 56;
+    let notesColWidth = 80;
+    let materialsColWidth = 70;
+    let rootCauseColWidth = 78;
+    let constraintsColWidth = 78;
+    let fixedWidth =
+      taskColWidth + tradeColWidth + notesColWidth + materialsColWidth +
+      rootCauseColWidth + constraintsColWidth;
     let dateColWidth = Math.floor((usable - fixedWidth) / numDates);
-    const MIN_DATE = 34;
+    const MIN_DATE = 30;
     if (dateColWidth < MIN_DATE) {
       // Shrink the text columns proportionally so each date cell stays at least MIN_DATE wide.
       const need = MIN_DATE * numDates;
-      const newFixed = Math.max(usable - need, 220);
+      const newFixed = Math.max(usable - need, 280);
       const ratio = newFixed / fixedWidth;
       taskColWidth = Math.floor(taskColWidth * ratio);
       tradeColWidth = Math.floor(tradeColWidth * ratio);
       notesColWidth = Math.floor(notesColWidth * ratio);
       materialsColWidth = Math.floor(materialsColWidth * ratio);
-      fixedWidth = taskColWidth + tradeColWidth + notesColWidth + materialsColWidth;
+      rootCauseColWidth = Math.floor(rootCauseColWidth * ratio);
+      constraintsColWidth = Math.floor(constraintsColWidth * ratio);
+      fixedWidth =
+        taskColWidth + tradeColWidth + notesColWidth + materialsColWidth +
+        rootCauseColWidth + constraintsColWidth;
       dateColWidth = Math.floor((usable - fixedWidth) / numDates);
     }
 
     const columnStyles: Record<string, any> = {
       task: { cellWidth: taskColWidth, fontSize: 7.5, halign: "left" },
       trade: { cellWidth: tradeColWidth, fontSize: 7, halign: "left" },
-      notes: { cellWidth: notesColWidth, fontSize: 7, halign: "left" },
-      materials: { cellWidth: materialsColWidth, fontSize: 7, halign: "left" },
+      notes: { cellWidth: notesColWidth, fontSize: 6.5, halign: "left" },
+      materials: { cellWidth: materialsColWidth, fontSize: 6.5, halign: "left" },
+      rootCause: { cellWidth: rootCauseColWidth, fontSize: 6.5, halign: "left" },
+      constraints: { cellWidth: constraintsColWidth, fontSize: 6.5, halign: "left" },
     };
     chunkDates.forEach((d) => {
       columnStyles[d] = { cellWidth: dateColWidth, fontSize: 8, halign: "center", fontStyle: "bold" };
