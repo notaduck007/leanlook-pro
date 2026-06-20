@@ -723,6 +723,79 @@ export function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetUser} onOpenChange={(o) => !o && setResetUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" /> Reset Password
+            </DialogTitle>
+            <DialogDescription>
+              Choose how to reset the password for{" "}
+              <strong>{resetUser?.display_name || "this user"}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Method</Label>
+              <Select
+                value={resetMode}
+                onValueChange={(v) => setResetMode(v as typeof resetMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="send_reset_email">Send reset email</SelectItem>
+                  <SelectItem value="set_password">Set temporary password</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {resetMode === "set_password" ? (
+              <>
+                <div className="space-y-2">
+                  <Label>New temporary password</Label>
+                  <Input
+                    type="password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Confirm password</Label>
+                  <Input
+                    type="password"
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                    placeholder="Re-enter password"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The user will be required to choose a new password the next time they sign in.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                A password reset email will be sent to the user's address with a secure link.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetUser(null)} disabled={resetting}>
+              Cancel
+            </Button>
+            <Button onClick={handleResetPassword} disabled={resetting}>
+              {resetting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {resetMode === "set_password" ? "Set Password" : "Send Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
