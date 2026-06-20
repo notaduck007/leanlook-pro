@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
+import ChangePassword from "./pages/ChangePassword";
 import Onboarding from "./pages/Onboarding";
 import Projects from "./pages/Projects";
 import NewProject from "./pages/NewProject";
@@ -26,7 +27,7 @@ import { Loader2 } from "lucide-react";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -37,6 +38,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+  if (user?.user_metadata?.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
   if (!profile?.company_id) return <Navigate to="/onboarding" replace />;
 
   return <AppLayout>{children}</AppLayout>;
@@ -57,6 +61,10 @@ function AppRoutes() {
     <Routes>
       <Route path="/auth" element={session ? <Navigate to="/" replace /> : <Auth />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route
+        path="/change-password"
+        element={!session ? <Navigate to="/auth" replace /> : <ChangePassword />}
+      />
       <Route
         path="/onboarding"
         element={
