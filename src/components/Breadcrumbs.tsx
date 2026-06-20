@@ -111,6 +111,7 @@ async function buildCrumbs(pathname: string): Promise<Crumb[]> {
     "/analytics": "Analytics",
     "/settings": "Settings",
     "/master-tasks": "Master Tasks",
+    "/subcontractors": "Sub Contractors",
   };
 
   if (simpleRoutes[pathname]) {
