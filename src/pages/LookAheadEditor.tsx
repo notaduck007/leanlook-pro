@@ -1430,6 +1430,10 @@ export default function LookAheadEditor() {
                   onDeleteLine={handleDeleteLine}
                   onNameChange={handleNameChange}
                   readOnly={isReadOnly}
+                  projectId={projectId}
+                  linkedConstraints={linkedConstraintsByLine[line.id] || []}
+                  projectOpenConstraints={projectConstraints}
+                  onConstraintsChanged={fetchProjectConstraints}
                 />
               ))
             )}
