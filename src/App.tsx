@@ -21,6 +21,7 @@ import Analytics from "./pages/Analytics";
 import LookAheads from "./pages/LookAheads";
 import MasterTasks from "./pages/MasterTasks";
 import SubContractors from "./pages/SubContractors";
+import Huddle from "./pages/Huddle";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -83,6 +84,7 @@ function AppRoutes() {
       <Route path="/master-tasks" element={<ProtectedRoute><MasterTasks /></ProtectedRoute>} />
       <Route path="/subcontractors" element={<ProtectedRoute><SubContractors /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+      <Route path="/huddle" element={<ProtectedRoute><Huddle /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
