@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LeanTrackingAnalytics } from "@/components/project/LeanTrackingAnalytics";
+import { ConstraintsLog, ConstraintsSummary } from "@/components/project/ConstraintsLog";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -194,6 +195,7 @@ export default function ProjectDetail() {
           <h1 className="text-2xl font-bold">{project.name}</h1>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-0.5">
             <span className="capitalize">{project.status}</span>
+            {id && <ConstraintsSummary projectId={id} />}
             {project.project_number && (
               <span className="inline-flex items-center gap-1">
                 <Hash className="h-3.5 w-3.5" /> {project.project_number}
@@ -243,6 +245,9 @@ export default function ProjectDetail() {
       {id && (
         <LeanTrackingAnalytics projectId={id} ppcGoal={project.ppc_goal ?? 80} />
       )}
+
+      {/* Constraints Log */}
+      {id && <ConstraintsLog projectId={id} />}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Upload */}
