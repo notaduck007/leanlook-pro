@@ -15,6 +15,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -374,6 +377,55 @@ export default function MasterTasks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Edit Dialog */}
+      <Dialog open={!!bulkMode} onOpenChange={(o) => !o && setBulkMode(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {bulkMode === "trade" && "Set default trade"}
+              {bulkMode === "duration" && "Set default duration"}
+              {bulkMode === "status" && "Set status"}
+            </DialogTitle>
+            <DialogDescription>
+              Apply this value to {selected.size} selected task{selected.size === 1 ? "" : "s"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {bulkMode === "trade" && (
+              <>
+                <Label>Default trade</Label>
+                <Input value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} placeholder="e.g., Electrical" autoFocus />
+              </>
+            )}
+            {bulkMode === "duration" && (
+              <>
+                <Label>Duration (days)</Label>
+                <Input type="number" min={1} value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} placeholder="e.g., 5" autoFocus />
+              </>
+            )}
+            {bulkMode === "status" && (
+              <>
+                <Label>Status</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkMode(null)}>Cancel</Button>
+            <Button onClick={handleBulkApply} disabled={bulkSaving}>
+              {bulkSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
