@@ -661,10 +661,7 @@ export function UserManagement() {
       <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update display name and role assignments.
-            </DialogDescription>
+            <DialogTitle>Edit User: {editUser?.display_name || 
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
