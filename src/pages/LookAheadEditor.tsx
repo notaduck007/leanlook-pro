@@ -1349,6 +1349,43 @@ export default function LookAheadEditor() {
       {isMobile ? (
         (filteredLines.length > 0 || filter) && (
           <div className="space-y-3">
+            {/* Day selector */}
+            {dates.length > 0 && (
+              <div className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-background/95 backdrop-blur border-b">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {dates.map((date, i) => {
+                    const d = parseISO(date);
+                    const isWeekend = [0, 6].includes(d.getDay());
+                    const isToday = date === todayStr;
+                    const isSelected = date === effectiveMobileDate;
+                    const isPlanning = i >= 7;
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => setSelectedMobileDate(date)}
+                        className={cn(
+                          "flex flex-col items-center justify-center shrink-0 rounded-md border min-w-[44px] min-h-[52px] px-1.5 py-1 text-[10px] leading-tight touch-manipulation transition-colors",
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-card hover:bg-accent",
+                          !isSelected && isWeekend && "opacity-70",
+                          !isSelected && isPlanning && "border-dashed",
+                          !isSelected && isToday && "border-primary text-primary"
+                        )}
+                      >
+                        <span className="uppercase font-semibold">{format(d, "EEE")}</span>
+                        <span className="text-sm font-bold">{format(d, "d")}</span>
+                        <span className="text-[9px] opacity-80">{format(d, "MMM")}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 px-0.5">
+                  {effectiveMobileDate && format(parseISO(effectiveMobileDate), "EEEE, MMM d")} · {filteredLines.length} task{filteredLines.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            )}
             {filteredLines.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">
                 No matching tasks.
@@ -1359,8 +1396,10 @@ export default function LookAheadEditor() {
                   key={line.id}
                   line={line}
                   dates={dates}
+                  selectedDate={effectiveMobileDate || undefined}
                   onStatusChange={handleStatusChange}
                   onFieldChange={handleFieldChange}
+                  onVarianceChange={handleVarianceChange}
                   onDeleteLine={handleDeleteLine}
                   onNameChange={handleNameChange}
                   readOnly={isReadOnly}
