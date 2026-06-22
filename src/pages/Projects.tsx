@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, FolderKanban } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -12,15 +13,20 @@ export default function Projects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!profile?.company_id) return;
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("company_id", profile.company_id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => setProjects(data || []));
+    const fetchProjects = async () => {
+      const { data } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false });
+      setProjects(data || []);
+      setLoading(false);
+    };
+    fetchProjects();
   }, [profile?.company_id]);
 
   const filtered = projects.filter((p) =>
@@ -46,7 +52,13 @@ export default function Projects() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <FolderKanban className="mx-auto h-12 w-12 mb-3 opacity-50 text-muted-foreground" />
