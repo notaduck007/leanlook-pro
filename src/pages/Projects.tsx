@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, FolderKanban } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -12,6 +13,7 @@ export default function Projects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -20,7 +22,11 @@ export default function Projects() {
       .select("*")
       .eq("company_id", profile.company_id)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setProjects(data || []));
+      .then(({ data }) => {
+        setProjects(data || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, [profile?.company_id]);
 
   const filtered = projects.filter((p) =>
