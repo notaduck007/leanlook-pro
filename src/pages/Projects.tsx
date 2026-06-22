@@ -52,7 +52,13 @@ export default function Projects() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <FolderKanban className="mx-auto h-12 w-12 mb-3 opacity-50 text-muted-foreground" />
