@@ -17,16 +17,16 @@ export default function Projects() {
 
   useEffect(() => {
     if (!profile?.company_id) return;
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("company_id", profile.company_id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setProjects(data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    const fetchProjects = async () => {
+      const { data } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false });
+      setProjects(data || []);
+      setLoading(false);
+    };
+    fetchProjects();
   }, [profile?.company_id]);
 
   const filtered = projects.filter((p) =>
