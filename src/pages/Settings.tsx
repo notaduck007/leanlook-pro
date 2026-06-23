@@ -8,12 +8,15 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings as SettingsIcon, Users, Palette, Tag, Bell } from "lucide-react";
+import { Settings as SettingsIcon, Users, Palette, Tag, Bell, HelpCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useTour } from "@/contexts/TourContext";
 
 export default function Settings() {
   const { profile, roles, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isAdmin = roles.includes("admin");
+  const { startTour } = useTour();
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -66,6 +69,24 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-base">Help & Onboarding</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                New to LeanLook or need a refresher? Take a 2-minute guided tour of the app.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={startTour}
+                className="min-h-11 shrink-0"
+              >
+                <HelpCircle className="mr-2 h-4 w-4" /> Take the product tour
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

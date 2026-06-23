@@ -61,7 +61,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-4" data-tour="sidebar-header">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
             <HardHat className="h-4 w-4 text-sidebar-primary-foreground" />
@@ -82,8 +82,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => {
                 const active = checkActive(location.pathname, item);
+                const slug = item.url === "/" ? "dashboard" : item.url.replace(/^\//, "").replace(/\//g, "-");
                 return (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem key={item.title} data-tour={`nav-${slug}`}>
                     <SidebarMenuButton asChild isActive={active}>
                       <NavLink
                         to={item.url}
@@ -109,8 +110,9 @@ export function AppSidebar() {
               <SidebarMenu>
                 {adminItems.map((item) => {
                   const active = checkActive(location.pathname, item);
+                  const slug = item.url.replace(/^\//, "").replace(/\//g, "-");
                   return (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.title} data-tour={`nav-${slug}`}>
                       <SidebarMenuButton asChild isActive={active}>
                         <NavLink
                           to={item.url}
