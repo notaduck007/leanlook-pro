@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Bell, Mail, Play, Loader2, Info } from "lucide-react";
+import { Bell, Mail, Play, Loader2, Info, CheckCircle2 } from "lucide-react";
 
 function ResultBlock({ data }: { data: any }) {
   if (!data) return null;
@@ -105,37 +105,19 @@ export function NotificationsAdmin() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Schedule (cron)</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600" /> Schedule (active)
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-xs">
-          <p className="text-muted-foreground">
-            To run these automatically, enable <code>pg_cron</code> + <code>pg_net</code> in your backend and schedule the calls.
-            Ask Lovable (or your admin) to run the SQL below once. Replace
-            <code className="mx-1">YOUR_ANON_KEY</code> with the project anon key.
+        <CardContent className="space-y-2 text-xs text-muted-foreground">
+          <p>
+            Scheduled jobs are running automatically in the background — no manual setup required.
           </p>
-          <pre className="bg-muted/40 rounded p-3 overflow-x-auto whitespace-pre">
-{`-- Daily reminders @ 06:00 UTC
-select cron.schedule(
-  'daily-reminders',
-  '0 6 * * *',
-  $$ select net.http_post(
-    url:='https://<PROJECT_REF>.supabase.co/functions/v1/daily-reminders',
-    headers:='{"Content-Type":"application/json","apikey":"YOUR_ANON_KEY"}'::jsonb,
-    body:='{}'::jsonb
-  ); $$
-);
-
--- Weekly digest, Monday @ 06:00 UTC
-select cron.schedule(
-  'weekly-digest',
-  '0 6 * * 1',
-  $$ select net.http_post(
-    url:='https://<PROJECT_REF>.supabase.co/functions/v1/weekly-digest',
-    headers:='{"Content-Type":"application/json","apikey":"YOUR_ANON_KEY"}'::jsonb,
-    body:='{}'::jsonb
-  ); $$
-);`}
-          </pre>
+          <ul className="space-y-1 pl-4 list-disc">
+            <li><span className="font-medium text-foreground">Daily reminders</span> — every day at 6:00 AM US Central (12:00 UTC).</li>
+            <li><span className="font-medium text-foreground">Weekly PPC digest</span> — every Monday at 6:00 AM US Central (12:00 UTC).</li>
+          </ul>
+          <p>Use the "Run now" buttons above any time you want to fire a job on demand.</p>
         </CardContent>
       </Card>
     </div>
