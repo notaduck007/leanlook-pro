@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FolderKanban, CalendarDays, FileUp, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WelcomeDialog } from "@/components/WelcomeDialog";
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -44,6 +45,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <WelcomeDialog />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
