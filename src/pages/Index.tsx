@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { FolderKanban, CalendarDays, FileUp, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
-import { WelcomeDialog } from "@/components/WelcomeDialog";
-
 export default function Dashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -45,13 +43,16 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <WelcomeDialog />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Welcome back to LeanLook</p>
         </div>
-        <Button onClick={() => navigate("/projects/new")} className="min-h-11">
+        <Button
+          onClick={() => navigate("/projects/new")}
+          className="min-h-11"
+          data-tour="new-project-btn"
+        >
           <Plus className="mr-2 h-4 w-4" /> New Project
         </Button>
       </div>
