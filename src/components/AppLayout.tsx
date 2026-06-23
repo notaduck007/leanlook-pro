@@ -21,7 +21,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <NotificationBell />
             </div>
           </header>
-          <main className="flex-1 p-4 md:p-6 overflow-auto">
+          <main className="flex-1 p-4 md:p-6 overflow-auto pb-safe pl-safe pr-safe">
             {children}
           </main>
         </div>

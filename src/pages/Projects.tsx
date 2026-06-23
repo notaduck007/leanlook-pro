@@ -35,9 +35,9 @@ export default function Projects() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-2xl font-bold">Projects</h1>
-        <Button onClick={() => navigate("/projects/new")}>
+        <Button onClick={() => navigate("/projects/new")} className="min-h-11">
           <Plus className="mr-2 h-4 w-4" /> New Project
         </Button>
       </div>
