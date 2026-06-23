@@ -24,12 +24,8 @@ export default function Auth() {
 
   const handleMicrosoftSignIn = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "azure",
-      options: {
-        scopes: "openid email profile",
-        redirectTo: window.location.origin,
-      },
+    const { data, error } = await supabase.auth.signInWithSSO({
+      domain: "anslowbryant.com",
     });
     if (error) {
       toast({
@@ -38,6 +34,10 @@ export default function Auth() {
         variant: "destructive",
       });
       setLoading(false);
+      return;
+    }
+    if (data?.url) {
+      window.location.href = data.url;
     }
   };
 
