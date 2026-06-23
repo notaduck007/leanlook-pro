@@ -18,6 +18,29 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
 
+  const ALLOWED_DOMAIN = "anslowbryant.com";
+  const isAllowedEmail = (e: string) =>
+    e.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
+
+  const handleMicrosoftSignIn = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: {
+        scopes: "openid email profile",
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) {
+      toast({
+        title: "Microsoft sign-in failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -33,6 +56,15 @@ export default function Auth() {
         setForgotPassword(false);
       }
     } else if (isSignUp) {
+      if (!isAllowedEmail(email)) {
+        toast({
+          title: "Access restricted",
+          description: "Only Anslow Bryant (@anslowbryant.com) accounts can access LeanLook.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
       const pwErr = validatePassword(password);
       if (pwErr) {
         toast({ title: "Error", description: pwErr, variant: "destructive" });
@@ -70,6 +102,15 @@ export default function Auth() {
         setIsSignUp(false);
       }
     } else {
+      if (!isAllowedEmail(email)) {
+        toast({
+          title: "Access restricted",
+          description: "Only Anslow Bryant (@anslowbryant.com) accounts can access LeanLook.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -93,6 +134,31 @@ export default function Auth() {
           </div>
         </CardHeader>
         <CardContent>
+          {!forgotPassword && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleMicrosoftSignIn}
+                disabled={loading}
+                className="w-full min-h-11 gap-2"
+                aria-label="Sign in with Microsoft"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                  <rect x="1" y="1" width="7.5" height="7.5" fill="#F25022" />
+                  <rect x="9.5" y="1" width="7.5" height="7.5" fill="#7FBA00" />
+                  <rect x="1" y="9.5" width="7.5" height="7.5" fill="#00A4EF" />
+                  <rect x="9.5" y="9.5" width="7.5" height="7.5" fill="#FFB900" />
+                </svg>
+                Sign in with Microsoft
+              </Button>
+              <div className="my-4 flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs uppercase text-muted-foreground">or</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && !forgotPassword && (
               <div className="space-y-1">
